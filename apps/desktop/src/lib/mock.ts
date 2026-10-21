@@ -439,10 +439,10 @@ function mockAiExposure(range: string): AiExposureData {
     "chatgpt.com": [
       { ip: "203.0.113.20", node: "HK-01", hoursAgo: 20, durationMin: 240, host: "chatgpt.com" },
       { ip: "203.0.113.22", node: "🇯🇵 日本 02", hoursAgo: 8, durationMin: 90, host: "chatgpt.com" },
-      { ip: "203.0.113.20", node: "HK-01", hoursAgo: 3, durationMin: 120, host: "chatgpt.com" },
+      { ip: "203.0.113.20", node: "JP-02", hoursAgo: 3, durationMin: 120, host: "chatgpt.com" },
     ],
     "openai.com": [
-      { ip: "203.0.113.20", node: "HK-01", hoursAgo: 18, durationMin: 120, host: "api.openai.com" },
+      { ip: "203.0.113.31", node: "US-01", hoursAgo: 18, durationMin: 120, host: "api.openai.com" },
       { ip: "198.51.100.7", node: "🇸🇬 新加坡 03", hoursAgo: 6, durationMin: 60, host: "platform.openai.com" },
     ],
     "claude.ai": [
