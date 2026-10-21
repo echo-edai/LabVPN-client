@@ -30,3 +30,6 @@ Thumbs.db
 # 视觉走查工具与本地 npm 缓存（不提交）
 /.visual-tools/
 **/.npm-cache/
+
+# 本地运行时验证目录
+/.runtime-home/
