@@ -12,9 +12,14 @@ mod services;
 mod state;
 mod util;
 
+use std::sync::atomic::AtomicBool;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+
 use tauri::{Emitter, Manager, RunEvent, WindowEvent};
+
+/// 退出清理只执行一次。
+static EXIT_CLEANED: AtomicBool = AtomicBool::new(false);
 
 use crate::state::AppState;
 
@@ -106,7 +111,12 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("构建 LabVPN 失败")
         .run(|app, event| {
-            if let RunEvent::ExitRequested { .. } = event {
+            // 退出时务必断开核心并关闭系统代理，避免留下指向已停止端口的代理设置；
+            // 同时覆盖托盘「退出」（app.exit）与窗口全部关闭两种路径，只执行一次。
+            if matches!(event, RunEvent::ExitRequested { .. } | RunEvent::Exit) {
+                if EXIT_CLEANED.swap(true, std::sync::atomic::Ordering::SeqCst) {
+                    return;
+                }
                 if let Some(state) = app.try_state::<AppState>() {
                     tauri::async_runtime::block_on(async {
                         let _ = services::orchestrator::disconnect(state.inner()).await;

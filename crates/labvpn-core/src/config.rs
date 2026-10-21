@@ -176,17 +176,22 @@ impl Default for ProbeTarget {
     }
 }
 
+/// 默认 Ping 校内网关探测目标（ping 通即 100% 校内）。
+pub fn campus_ping_target() -> ProbeTarget {
+    ProbeTarget {
+        name: "校内网关(Ping)".into(),
+        host: defaults::CAMPUS_PING_TARGET.into(),
+        port: 0,
+        protocol: ProbeProtocol::Icmp,
+        weight: 100,
+        timeout_ms: defaults::PING_TIMEOUT_MS,
+    }
+}
+
 /// 默认探测列表（2026-10 实测可用）。
 pub fn default_probe_targets() -> Vec<ProbeTarget> {
     vec![
-        ProbeTarget {
-            name: "校内网关(Ping)".into(),
-            host: defaults::CAMPUS_PING_TARGET.into(),
-            port: 0,
-            protocol: ProbeProtocol::Icmp,
-            weight: 100,
-            timeout_ms: defaults::PING_TIMEOUT_MS,
-        },
+        campus_ping_target(),
         ProbeTarget {
             name: "校内镜像站".into(),
             host: "10.176.52.2".into(),
@@ -1079,7 +1084,21 @@ impl AppConfig {
         }
         let mut config: AppConfig = serde_json::from_value(value)?;
         config.version = CONFIG_VERSION;
+        config.ensure_new_defaults();
         Ok(config)
+    }
+
+    /// 旧配置迁移时补齐新增的默认信号（不覆盖用户自定义探测目标）。
+    pub fn ensure_new_defaults(&mut self) {
+        let has_ping = self.campus_vpn.probe_targets.iter().any(|target| {
+            target.protocol == ProbeProtocol::Icmp
+                && target.host.trim() == defaults::CAMPUS_PING_TARGET
+        });
+        if !has_ping {
+            self.campus_vpn
+                .probe_targets
+                .insert(0, campus_ping_target());
+        }
     }
 
     /// 序列化为 JSON 字符串（格式化）。
@@ -1127,6 +1146,32 @@ mod tests {
         config.engine.controller_port = config.engine.mixed_port;
         let errors = config.errors();
         assert!(errors.iter().any(|e| e.field == "engine.mixedPort"));
+    }
+
+    #[test]
+    fn migrates_old_probe_targets_to_include_ping() {
+        let mut value = serde_json::to_value(AppConfig::default()).expect("serialize");
+        // 模拟旧版本配置：删除 Ping 目标、删除 nodeSelection 字段
+        value["campusVpn"]["probeTargets"] = serde_json::json!([
+            {"name": "校内镜像站", "host": "10.176.52.2", "port": 443, "protocol": "tcp", "weight": 100, "timeoutMs": 1500}
+        ]);
+        value
+            .as_object_mut()
+            .expect("object")
+            .remove("nodeSelection");
+        let config = AppConfig::migrate_json(value).expect("migrate");
+        assert!(config
+            .campus_vpn
+            .probe_targets
+            .iter()
+            .any(|target| target.protocol == ProbeProtocol::Icmp
+                && target.host == defaults::CAMPUS_PING_TARGET));
+        // 用户自定义的探针保留
+        assert!(config
+            .campus_vpn
+            .probe_targets
+            .iter()
+            .any(|target| target.host == "10.176.52.2"));
     }
 
     #[test]
