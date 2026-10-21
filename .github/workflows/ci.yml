@@ -21,6 +21,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Prepare sidecar placeholders
+        shell: bash
+        run: |
+          node -e "const fs=require('fs');const p='apps/desktop/src-tauri/binaries';fs.mkdirSync(p,{recursive:true});for(const f of ['mihomo','labvpn-helper','wintun.dll'])fs.writeFileSync(p+'/'+f,'');"
+
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
         run: |

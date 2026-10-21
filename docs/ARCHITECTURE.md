@@ -73,7 +73,7 @@
        2. generator::generate(&config, rules)    # mihomo YAML（纯函数）
        3. validate: 调用 mihomo -t（可选，开发/应用前）
        4. 写入 app_data/core/config.yaml
-       5. 若核心在运行 → PUT /configs?force=true 热重载；否则按需启动
+       5. 若核心在运行 → 重启核心（TUN/DNS 等变更必须重启，避免半热更新状态）
        6. 根据校园网检测切换组 "🎓 校内"           # 不重启
 ```
 
@@ -194,7 +194,7 @@ AppConfig {
   | 命令 | 参数 | 说明 |
   |---|---|---|
   | `ping` | - | 存活与版本 |
-  | `start_core` | `config_yaml: string` | 写入 helper 工作目录后启动 mihomo |
+  | `start_core` | `config_yaml: string, assets: map<path,content>` | 写入工作目录（内置规则 + 附加资源）后启动 mihomo |
   | `stop_core` | - | 停止并等待退出 |
   | `restart_core` | `config_yaml: string` | 先停后起 |
   | `status` | - | 核心 PID、运行时长、最近错误 |

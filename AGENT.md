@@ -58,11 +58,10 @@ LabVPN-client/
 │   └── labvpn-helper/        # 特权 helper 二进制（只被安装/提权后运行）
 ├── resources/
 │   ├── rules/                # 内置规则数据（FDU、CN、预设），数据驱动
-│   ├── templates/            # mihomo 配置片段模板
-│   └── icons/                # 应用图标源文件
+│   └── icons/                # 应用图标源文件（generate-icons.py 生成）
 ├── scripts/                  # 开发/构建/发布脚本（Node 或 Shell，单一职责）
 ├── .github/workflows/        # CI 与三平台发布
-└── tests/                    # 跨 crate 集成测试与 fixtures（单元测试就近放）
+└── （测试）                   # 单元测试就近放模块内；跨模块快照放 crates/*/tests/
 ```
 
 **归属判定口诀**：
@@ -96,7 +95,7 @@ LabVPN-client/
 
 | 层 | 技术 | 约定 |
 |---|---|---|
-| 桌面壳 | Tauri 2.12+ | 只用官方插件：`opener`、`autostart`、`single-instance` |
+| 桌面壳 | Tauri 2.12+ | 只用官方插件：`autostart`、`single-instance`；打开外部路径/URL 走自研 `platform::open_path` |
 | 前端 | React 19 + TypeScript 5.x + Vite 8 | 函数组件 + hooks；禁止 class 组件 |
 | 样式 | Tailwind CSS 4（`@tailwindcss/vite`） | 颜色/圆角/阴影走 `styles/tokens.css`，禁止魔法色值 |
 | 状态 | Zustand 5 | 按领域分 store，禁止全局万能 store |
@@ -141,7 +140,7 @@ LabVPN-client/
    - `IP-CIDR,<vpn-server-ip>/32,DIRECT,no-resolve`（若解析得到）
    - `PROCESS-NAME,<fdu-connect 进程名>,DIRECT` / 核心进程直连
 3. 校内分流统一走代理组 `🎓 校内`（select：`DIRECT` / `🏫 FDU-RVPN`）。程序根据校园网检测结果切换组，**不要**通过重启核心实现切换。
-4. 代理组命名与规则引用必须来自 `resources/rules/groups.ts` 同源常量（Rust 常量为准）。
+4. 代理组命名与规则引用必须来自 `crates/labvpn-core/src/rules/names.rs` 同源常量（前端 `lib/constants.ts` 镜像）。
 5. 新增内置规则集：数据文件放 `resources/rules/`，在 `docs/RULES.md` 登记来源/许可证/更新方式，并加同步脚本。
 6. 修改生成器必须更新 `crates/labvpn-core/tests/generator_snapshot.rs` 快照并说明原因。
 

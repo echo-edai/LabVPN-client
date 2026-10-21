@@ -54,6 +54,11 @@ jobs:
         working-directory: apps/desktop
         run: npm ci
 
+      - name: Prepare sidecar placeholders
+        shell: bash
+        run: |
+          node -e "const fs=require('fs');const p='apps/desktop/src-tauri/binaries';fs.mkdirSync(p,{recursive:true});for(const f of ['mihomo','labvpn-helper','wintun.dll'])fs.writeFileSync(p+'/'+f,'');"
+
       - name: Fetch mihomo sidecar
         run: node scripts/fetch-sidecars.mjs --force
 
