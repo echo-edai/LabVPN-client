@@ -24,7 +24,7 @@ jobs:
       - name: Prepare sidecar placeholders
         shell: bash
         run: |
-          node -e "const fs=require('fs');const p='apps/desktop/src-tauri/binaries';fs.mkdirSync(p,{recursive:true});for(const f of ['mihomo','labvpn-helper','wintun.dll'])fs.writeFileSync(p+'/'+f,'');"
+          node -e "const fs=require('fs');const p='apps/desktop/src-tauri/binaries';fs.mkdirSync(p,{recursive:true});for(const f of ['mihomo','mihomo.exe','labvpn-helper','labvpn-helper.exe','fdu-connect','fdu-connect.exe','wintun.dll'])fs.writeFileSync(p+'/'+f,'');"
 
       - name: Install Linux dependencies
         if: runner.os == 'Linux'

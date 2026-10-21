@@ -15,7 +15,8 @@ pub async fn detect_vpn_binary(state: State<'_, AppState>) -> CmdResult<Existing
     let config = state.config_snapshot();
     let paths = state.paths.clone();
     let campus = config.campus_vpn.clone();
-    let result = tokio::task::spawn_blocking(move || vpn::detect_existing(&campus, &paths))
+    let app = state.app.clone();
+    let result = tokio::task::spawn_blocking(move || vpn::detect_existing(&app, &campus, &paths))
         .await
         .unwrap_or_default();
     Ok(result)

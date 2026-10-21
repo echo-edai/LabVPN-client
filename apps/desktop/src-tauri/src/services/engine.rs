@@ -151,6 +151,11 @@ impl EngineManager {
         inner.helper_port = request.helper_port;
         inner.helper_token = request.helper_token.clone();
 
+        let asset_paths: Vec<String> = request
+            .assets
+            .iter()
+            .map(|(path, _)| path.clone())
+            .collect();
         if request.mode == EngineMode::Tun {
             let assets: std::collections::BTreeMap<String, String> =
                 request.assets.iter().cloned().collect();
@@ -266,6 +271,18 @@ impl EngineManager {
                 request.controller_port
             ),
         );
+
+        // 安全清理：核心已完成配置解析，销毁含敏感字段的配置与私钥资产
+        if request.mode == EngineMode::SystemProxy {
+            secure_remove(&request.config_path);
+        }
+        for relative in &asset_paths {
+            if relative.starts_with("keys/") {
+                secure_remove(&request.workdir.join(relative));
+            }
+        }
+        self.logs
+            .info("engine", "敏感配置已从磁盘清理（仅保留在内存中）");
 
         let app = self.app.clone();
         let api_for_stream = api.clone();
@@ -437,4 +454,19 @@ impl EngineManager {
     fn emit_status(&self, status: &EngineStatus) {
         events::emit(&self.app, events::ENGINE_STATUS, status.clone());
     }
+}
+
+/// 覆盖并删除敏感文件，降低磁盘残留风险。
+fn secure_remove(path: &Path) {
+    use std::io::Write;
+    if let Ok(metadata) = std::fs::metadata(path) {
+        if metadata.is_file() && metadata.len() > 0 {
+            let len = metadata.len() as usize;
+            if let Ok(mut file) = std::fs::OpenOptions::new().write(true).open(path) {
+                let _ = file.write_all(&vec![0u8; len.min(4096)]);
+                let _ = file.sync_all();
+            }
+        }
+    }
+    let _ = std::fs::remove_file(path);
 }

@@ -1,0 +1,12 @@
+fdu-connect — 复旦 RVPN 客户端（Go 实现）
+Copyright (C) AkiraSalvare and contributors
+License: GNU Affero General Public License v3.0 (AGPL-3.0)
+
+本应用 LabVPN 以独立进程方式打包并调用 fdu-connect，未修改其源码。
+- 上游源码：https://github.com/AkiraSalvare/fdu-connect
+- 本 Release 构建所使用的 commit：a904877f0eda0c7b1d7933ad6e80d5e8d3ffd584
+- 完整许可证：见同目录 AGPL-3.0.txt
+- 对应源码归档：随 Release 附件 fdu-connect-source-a904877.tar.gz 提供
+
+AGPL-3.0 要求：分发本二进制时须提供 Corresponding Source。本 Release 同时提供
+源码归档与上游仓库地址，满足该义务。若你修改了 fdu-connect 并重新分发，请同样开源。

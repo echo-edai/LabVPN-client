@@ -37,6 +37,18 @@ fn first_usable(candidates: Vec<(PathBuf, &'static str)>) -> ResolvedBinary {
     }
 }
 
+/// 查找随 App 打包的 sidecar（`Resources/bin/<name>`，自动兼容 `.exe`）。
+pub fn bundled_sidecar(app: &AppHandle, base_name: &str) -> Option<PathBuf> {
+    let dir = app.path().resource_dir().ok()?;
+    for name in [base_name.to_string(), format!("{base_name}.exe")] {
+        let candidate = dir.join("bin").join(&name);
+        if is_usable(&candidate) {
+            return Some(candidate);
+        }
+    }
+    None
+}
+
 /// 资源目录下的文件。
 fn resource_file(app: &AppHandle, relative: &str) -> Option<PathBuf> {
     let dir = app.path().resource_dir().ok()?;

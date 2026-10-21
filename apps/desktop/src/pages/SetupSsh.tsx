@@ -302,7 +302,8 @@ export function SetupSsh() {
             <ul className="space-y-2 text-[11.5px] leading-5 text-ink-muted">
               <li>· LabVPN 使用 mihomo 原生 `ssh` 出站：在服务器上建立 SSH 连接，匹配规则的 TCP 流量经其转发。</li>
               <li>· SSH 只转发 TCP，不处理 UDP；DNS 仍由分流规则决定。</li>
-              <li>· 密码/私钥口令保存在本机加密密钥库，写入 mihomo 配置时文件权限为 0600。</li>
+              <li>· 密码/私钥口令仅加密保存在本机密钥库；写入 mihomo 的临时配置在核心启动后立即销毁，不上传云端。</li>
+              <li>· 更安全的方式：选择私钥认证，密码框留空。</li>
               <li>· 这是「出口选择」，不会在服务器上留下全局代理规则。</li>
             </ul>
           </Card>

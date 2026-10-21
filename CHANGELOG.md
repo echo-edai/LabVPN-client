@@ -2,6 +2,23 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.1.1] — 预发布（当前）
+
+### Added
+- **内置 fdu-connect**：App 安装包直接包含复旦 RVPN 连接器（AGPL-3.0，独立进程），开箱即用
+- macOS 签名/公证流水线（Developer ID + notarytool）与 Windows 代码签名流水线（证书配置后自动启用）
+- `scripts/sign-macos.sh`、`scripts/build-local-macos.sh` 一键本机构建/签名/启动
+- Release 自动附带 fdu-connect 与 mihomo 的许可证与对应源码归档（GPL/AGPL 合规）
+
+### Security
+- 含密码的临时配置文件（fdu-connect config.toml / mihomo YAML、SSH 私钥资产）在进程读取后**覆盖销毁**
+- 凭据继续使用 AES-256-GCM + 机器绑定密钥加密存储（0600），无云端上传
+- 配置预览对密钥字段脱敏；日志/诊断包自动打码
+
+### Fixed
+- 修复跨平台 sidecar 资源命名（`mihomo.exe` / `labvpn-helper.exe`）导致 Windows 包内二进制缺失
+- 修复 Windows zip 内二进制与 wintun.dll 路径/架构选择
+
 ## [Unreleased]
 
 ### Added

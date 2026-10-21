@@ -446,8 +446,12 @@ export function Settings() {
           <div className="mt-3 flex items-start gap-2 rounded-lg border border-line bg-card px-2.5 py-2 text-[10.5px] text-ink-muted">
             <Info size={12} className="mt-0.5 shrink-0" />
             <span>
-              LabVPN 为非官方开源项目。mihomo（GPL-3.0）与 fdu-connect（AGPL-3.0）作为独立进程使用，详见 NOTICE。
+              LabVPN 为非官方开源项目。mihomo（GPL-3.0）与 fdu-connect（AGPL-3.0）已随 App 打包并以独立进程运行，许可证与源码归档见 Release。
             </span>
+          </div>
+          <div className="mt-2 flex items-start gap-2 rounded-lg border border-[var(--ok)]/20 bg-[var(--ok)]/5 px-2.5 py-2 text-[10.5px] text-ink-muted">
+            <ShieldCheck size={12} className="mt-0.5 shrink-0 text-[var(--ok)]" />
+            <span>所有账号密码/TOTP/私钥口令仅加密保存在本机，绝不上传云端；敏感临时配置文件在核心启动后即销毁。</span>
           </div>
           <div className="mt-2 flex items-center justify-between">
             <span className="font-mono text-[10px] text-ink-muted">github.com/echo-edai/LabVPN-client</span>

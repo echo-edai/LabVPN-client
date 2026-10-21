@@ -31,6 +31,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: false
+
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
         run: |
@@ -59,35 +64,103 @@ jobs:
       - name: Prepare sidecar placeholders
         shell: bash
         run: |
-          node -e "const fs=require('fs');const p='apps/desktop/src-tauri/binaries';fs.mkdirSync(p,{recursive:true});for(const f of ['mihomo','labvpn-helper','wintun.dll'])fs.writeFileSync(p+'/'+f,'');"
+          node -e "const fs=require('fs');const p='apps/desktop/src-tauri/binaries';fs.mkdirSync(p,{recursive:true});for(const f of ['mihomo','mihomo.exe','labvpn-helper','labvpn-helper.exe','fdu-connect','fdu-connect.exe','wintun.dll'])fs.writeFileSync(p+'/'+f,'');"
 
-      - name: Fetch mihomo sidecar
-        run: node scripts/fetch-sidecars.mjs --force
+      - name: Fetch mihomo + build fdu-connect (bundled)
+        run: node scripts/fetch-sidecars.mjs --force --require-fdu
 
       - name: Build privileged helper
+        run: node scripts/fetch-sidecars.mjs --helper
+
+      - name: Sign bundled sidecars (macOS, when certificate configured)
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: |
-          cargo build -p labvpn-helper --release
-          node -e "
-            const fs=require('fs'),path=require('path');
-            const name=process.platform==='win32'?'labvpn-helper.exe':'labvpn-helper';
-            fs.copyFileSync(path.join('target','release',name),path.join('apps','desktop','src-tauri','binaries','labvpn-helper'));
-          "
+          if [ -z "$APPLE_SIGNING_IDENTITY" ]; then
+            echo "未配置 APPLE_SIGNING_IDENTITY，跳过 sidecar 签名"
+            exit 0
+          fi
+          for f in apps/desktop/src-tauri/binaries/mihomo apps/desktop/src-tauri/binaries/labvpn-helper apps/desktop/src-tauri/binaries/fdu-connect; do
+            if [ -s "$f" ]; then
+              codesign --force --options runtime --timestamp --sign "$APPLE_SIGNING_IDENTITY" "$f"
+            fi
+          done
+
+      - name: Import Windows certificate (when configured)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          if (-not $env:WINDOWS_CERTIFICATE) {
+            Write-Host "未配置 WINDOWS_CERTIFICATE，跳过证书导入"
+            exit 0
+          }
+          $pfxPath = Join-Path $env:RUNNER_TEMP "certificate.pfx"
+          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE))
+          $password = ConvertTo-SecureString -String $env:WINDOWS_CERTIFICATE_PASSWORD -Force -AsPlainText
+          Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password $password | Out-Null
+
+      - name: Configure Windows signing config
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          WINDOWS_CERT_THUMBPRINT: ${{ secrets.WINDOWS_CERT_THUMBPRINT }}
+        run: |
+          if (-not $env:WINDOWS_CERT_THUMBPRINT) {
+            Write-Host "未配置 WINDOWS_CERT_THUMBPRINT，跳过自动签名配置"
+            exit 0
+          }
+          node -e "const fs=require('fs');const p='apps/desktop/src-tauri/tauri.conf.json';const c=JSON.parse(fs.readFileSync(p,'utf8'));c.bundle.windows={...(c.bundle.windows||{}),certificateThumbprint:process.env.WINDOWS_CERT_THUMBPRINT,digestAlgorithm:'sha256',timestampUrl:'http://timestamp.digicert.com'};fs.writeFileSync(p,JSON.stringify(c,null,2));"
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # macOS 签名/公证（在仓库 Secrets 中配置后自动启用）
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         with:
           projectPath: apps/desktop
           tagName: ${{ github.ref_name }}
           releaseName: "LabVPN ${{ github.ref_name }}"
           releaseBody: |
-            LabVPN ${{ github.ref_name }}
+            ## LabVPN ${{ github.ref_name }}
 
-            - 三页配置：订阅 / 校内 VPN / SSH 转发
-            - 融合特调规则：10.0.0.0/8 → 校内 VPN，国内直连，国外走订阅
-            - 校内网络自动检测，在校内自动跳过 VPN
-            - 平台：macOS / Windows / Ubuntu / AlmaLinux（rpm）
+            跨平台自动分流客户端：复旦校内 VPN + 机场订阅 + 公网 SSH 一体化。
+
+            ### 本版更新
+            - **内置 fdu-connect**：无需单独安装校内 VPN 连接器
+            - 凭据仅本机加密保存，含密码的临时配置在启动后立即销毁，绝不上传云端
+            - 校内外自动检测：校内直连、校外自动 VPN + 分流
+            - 四平台安装包：macOS（dmg）/ Windows（exe、msi）/ Ubuntu（deb、AppImage）/ AlmaLinux（rpm）
+
+            ### 安装提示
+            - macOS：若未签名/公证，首次打开请右键 → 打开；正式签名需 Apple Developer 证书
+            - Windows：SmartScreen 提示时选择“仍要运行”
+            - Linux：`sudo apt install ./LabVPN_*.deb` 或 `chmod +x *.AppImage && ./LabVPN_*.AppImage`
+
+            ### 合规
+            本 Release 附带 fdu-connect（AGPL-3.0）与 mihomo（GPL-3.0）的许可证、NOTICE 与源码归档。
+
+            详见 README 与 docs/USER_GUIDE.md。
           releaseDraft: true
-          prerelease: false
+          prerelease: true
           args: ${{ matrix.args }}
+
+      - name: Attach fdu-connect source archive (AGPL compliance)
+        if: runner.os == 'Linux'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          curl -fsSL -o "fdu-connect-source-a904877.zip" \
+            "https://github.com/AkiraSalvare/fdu-connect/archive/a904877f0eda0c7b1d7933ad6e80d5e8d3ffd584.zip"
+          gh release upload "${{ github.ref_name }}" "fdu-connect-source-a904877.zip" --clobber

@@ -127,7 +127,7 @@ impl VpnManager {
 
         // 复用模式：只探测端口
         if !config.managed {
-            inner.binary_path = resolve_binary(config, paths);
+            inner.binary_path = resolve_binary(&self.app, config, paths);
             if self.port_open(config.socks_port).await {
                 inner.state = "reusing".to_string();
                 inner.existing = true;
@@ -149,7 +149,7 @@ impl VpnManager {
         }
 
         // 托管模式
-        let binary = resolve_binary(config, paths).ok_or_else(|| {
+        let binary = resolve_binary(&self.app, config, paths).ok_or_else(|| {
             CommandError::new(
                 "vpn",
                 "找不到 fdu-connect 可执行文件：请在配置页指定路径，或参考 docs/BUILD.md 编译安装",
@@ -301,6 +301,7 @@ impl VpnManager {
         }
 
         if !ready {
+            secure_remove(&paths.vpn_config_file);
             let detail = failure.unwrap_or_else(|| "等待 fdu-connect 就绪超时（45s）".to_string());
             let recent = inner.log_lines.lock().await.clone();
             let _ = self.kill_child(&mut inner).await;
@@ -317,6 +318,10 @@ impl VpnManager {
             ));
         }
 
+        // 安全清理：fdu-connect 已完成配置读取，销毁含明文密码的临时配置文件
+        secure_remove(&paths.vpn_config_file);
+        self.logs
+            .info("vpn", "临时配置文件已销毁（密码不落盘留存）");
         inner.state = "running".to_string();
         inner.message = Some(format!(
             "校内 VPN 已连接（SOCKS 127.0.0.1:{}）",
@@ -352,7 +357,7 @@ impl VpnManager {
         secrets: &SecretStore,
         paths: &AppPaths,
     ) -> CmdResult<VpnTestResult> {
-        let binary = resolve_binary(config, paths)
+        let binary = resolve_binary(&self.app, config, paths)
             .ok_or_else(|| CommandError::new("vpn", "找不到 fdu-connect 可执行文件"))?;
         let password = secrets
             .get(config.password_ref.as_deref().unwrap_or(""))
@@ -442,7 +447,7 @@ impl VpnManager {
         let _ = child.kill().await;
         let _ = stdout_task.await;
         let _ = stderr_task.await;
-        let _ = std::fs::remove_file(&test_config);
+        secure_remove(&test_config);
         log_lines.extend(lines.lock().await.clone());
         let recent: Vec<String> = log_lines.iter().rev().take(10).cloned().collect();
 
@@ -506,7 +511,13 @@ impl VpnManager {
 }
 
 /// 解析 fdu-connect 可执行文件。
-pub fn resolve_binary(config: &CampusVpnConfig, paths: &AppPaths) -> Option<PathBuf> {
+///
+/// 优先级：用户显式指定 → App 内置（打包） → 应用数据目录 → 系统常见路径 → PATH。
+pub fn resolve_binary(
+    app: &AppHandle,
+    config: &CampusVpnConfig,
+    paths: &AppPaths,
+) -> Option<PathBuf> {
     let file_name = if cfg!(windows) {
         "fdu-connect.exe"
     } else {
@@ -518,6 +529,10 @@ pub fn resolve_binary(config: &CampusVpnConfig, paths: &AppPaths) -> Option<Path
         if !path.is_empty() {
             candidates.push(PathBuf::from(path));
         }
+    }
+    // App 内置（Release 打包）：优先于系统安装，保证开箱即用
+    if let Some(bundled) = crate::services::core_bin::bundled_sidecar(app, "fdu-connect") {
+        candidates.push(bundled);
     }
     candidates.push(paths.bin_dir.join(file_name));
     if let Some(home) = home_dir() {
@@ -541,8 +556,8 @@ pub fn resolve_binary(config: &CampusVpnConfig, paths: &AppPaths) -> Option<Path
 }
 
 /// 探测环境中已有的 fdu-connect。
-pub fn detect_existing(config: &CampusVpnConfig, paths: &AppPaths) -> ExistingVpn {
-    let binary = resolve_binary(config, paths);
+pub fn detect_existing(app: &AppHandle, config: &CampusVpnConfig, paths: &AppPaths) -> ExistingVpn {
+    let binary = resolve_binary(app, config, paths);
     let ports = [config.socks_port, 1080];
     let socks_port = ports.into_iter().find(|port| port_open_blocking(*port));
     let service_label = {
@@ -585,6 +600,20 @@ fn is_usable(path: &Path) -> bool {
         && std::fs::metadata(path)
             .map(|metadata| metadata.len() > 0)
             .unwrap_or(false)
+}
+
+/// 覆盖并删除敏感文件，降低磁盘残留风险。
+fn secure_remove(path: &Path) {
+    if let Ok(metadata) = std::fs::metadata(path) {
+        if metadata.is_file() && metadata.len() > 0 {
+            let len = metadata.len() as usize;
+            if let Ok(mut file) = std::fs::OpenOptions::new().write(true).open(path) {
+                let _ = std::io::Write::write_all(&mut file, &vec![0u8; len.min(4096)]);
+                let _ = file.sync_all();
+            }
+        }
+    }
+    let _ = std::fs::remove_file(path);
 }
 
 fn home_dir() -> Option<PathBuf> {

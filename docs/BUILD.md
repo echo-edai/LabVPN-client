@@ -47,31 +47,25 @@ node scripts/fetch-sidecars.mjs --helper   # 同时编译并复制 labvpn-helper
 - Linux：`mihomo-linux-amd64` / `mihomo-linux-arm64`
 - Windows：`mihomo-windows-amd64.zip` + 自动下载 `wintun.dll`
 
-### 2.2 fdu-connect（校内 VPN）
+### 2.2 fdu-connect（校内 VPN，**随安装包打包**）
 
-fdu-connect 使用 **AGPL-3.0**，本项目**不打包**它，有两种方式获得：
+`scripts/fetch-sidecars.mjs` 会自动准备 fdu-connect：
 
-1. **使用已有安装**（推荐）：LabVPN 会自动发现
-   - `~/LocalDocuments/fdu-connect/fdu-connect`
-   - `~/.local/bin/fdu-connect`、`/usr/local/bin/fdu-connect`、`/opt/fdu-connect/fdu-connect`
-   - `PATH` 中的 `fdu-connect`
-   - 应用数据目录 `…/bin/fdu-connect`
-2. **自行编译**（跨平台）：
+1. 若设置了 `FDU_CONNECT_BIN` → 使用该二进制；
+2. 否则查找本机已有安装（`~/LocalDocuments/fdu-connect`、`/usr/local/bin` 等）；
+3. 否则在安装了 Go 1.24+ 的环境下，从固定 commit
+   `a904877f0eda0c7b1d7933ad6e80d5e8d3ffd584` 克隆源码并 `go build`；
+4. 最后写入 `binaries/fdu-connect`（Windows 为 `.exe`），随 App 一起打包。
 
 ```bash
-git clone https://github.com/AkiraSalvare/fdu-connect.git
-cd fdu-connect
-go build -o fdu-connect .            # 需要 Go 1.24+
-# 或交叉编译：
-GOOS=windows GOARCH=amd64 go build -o fdu-connect.exe .
-GOOS=linux   GOARCH=amd64 go build -o fdu-connect .
-GOOS=linux   GOARCH=arm64 go build -o fdu-connect .
+# CI / 干净环境（有 Go）
+node scripts/fetch-sidecars.mjs --require-fdu
+# 本机（使用已有 fdu-connect）
+FDU_CONNECT_BIN=~/LocalDocuments/fdu-connect/fdu-connect node scripts/fetch-sidecars.mjs
 ```
 
-把产物放到任意被发现的路径，或在「配置向导 ② 校内 VPN」中显式填写路径。
-Windows 需要 `wintun.dll` 时（TUN 模式在 fdu-connect 内不使用，可不放）。
-
-> macOS 首次运行可能被 Gatekeeper 拦截：`xattr -dr com.apple.quarantine fdu-connect`。
+**AGPL-3.0 合规**：fdu-connect 以独立进程打包、未修改源码；许可证与 NOTICE 随 App 位于
+`Resources/licenses/`，对应 commit 的源码归档由 Release 工作流上传为附件。
 
 ### 2.3 labvpn-helper（TUN 模式特权服务）
 
@@ -120,7 +114,41 @@ npm run build             # tauri build，产物在 src-tauri/target/release/bun
 | Ubuntu | `.deb`、`.AppImage` |
 | AlmaLinux | `.rpm`（`bundle.targets` 已包含 all；需 `rpm` 工具链） |
 
-### 4.1 签名与公证（发布必需）
+### 4.1 签名与公证
+
+#### macOS（Developer ID + 公证）
+
+1. 准备 Apple Developer Program 账号，创建 **Developer ID Application** 证书；
+2. 导出 `.p12` 并安装到本机钥匙串，或配置到 GitHub Secrets；
+3. 本机一键构建 + 签名 + 公证 + 启动：
+
+```bash
+APPLE_SIGNING_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
+APPLE_ID="you@example.com" APPLE_PASSWORD="app-specific-password" APPLE_TEAM_ID="TEAMID" \
+./scripts/build-local-macos.sh
+```
+
+GitHub Secrets（Release 自动使用）：
+`APPLE_SIGNING_IDENTITY`、`APPLE_CERTIFICATE`（base64 p12）、`APPLE_CERTIFICATE_PASSWORD`、
+`APPLE_ID`、`APPLE_PASSWORD`（App 专用密码）、`APPLE_TEAM_ID`、`KEYCHAIN_PASSWORD`。
+
+> 免费 Apple 账号无法公证，下载后仍需右键 → 打开；付费 Developer Program 才能实现
+> 「下载即安装」。
+
+#### Windows（代码签名证书）
+
+1. 购买 OV/EV 代码签名证书，导出 `.pfx`；
+2. 配置 Secrets：`WINDOWS_CERTIFICATE`（base64 pfx）、`WINDOWS_CERTIFICATE_PASSWORD`、
+   `WINDOWS_CERT_THUMBPRINT`（证书指纹）；
+3. Release 工作流会自动导入证书并把 `certificateThumbprint` 写入构建配置。
+
+#### 无证书时的行为
+
+- macOS：构建脚本执行 **ad-hoc 签名**（本机可直接运行；他人下载会被 Gatekeeper 拦截）；
+- Windows：未签名（SmartScreen 提示，可"仍要运行"）；
+- Linux：无需签名。
+
+### 4.2 旧版说明
 
 - **macOS**：配置 `APPLE_CERTIFICATE`、`APPLE_SIGNING_IDENTITY`、`APPLE_ID`、
   `APPLE_PASSWORD`、`APPLE_TEAM_ID` 等环境变量后由 Tauri 完成签名与公证。

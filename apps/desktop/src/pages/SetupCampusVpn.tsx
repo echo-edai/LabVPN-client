@@ -157,7 +157,11 @@ export function SetupCampusVpn() {
               <Field
                 label={t("setupCampus.password")}
                 required
-                hint={passwordSaved ? t("setupCampus.passwordSaved") : undefined}
+                hint={
+                  passwordSaved
+                    ? t("setupCampus.passwordSaved")
+                    : "密码仅经 AES-256-GCM 加密保存在本机，不会上传任何服务器"
+                }
               >
                 <PasswordInput
                   value={draft.password}
@@ -371,6 +375,15 @@ export function SetupCampusVpn() {
 
         <div className="space-y-5">
           <CampusCard />
+          <Card className="border-[var(--ok)]/20 bg-[var(--ok)]/5">
+            <CardHeader title="凭据安全" icon={<ShieldCheck size={15} />} />
+            <ul className="space-y-1.5 text-[11px] leading-4 text-ink-muted">
+              <li>· 账号密码经 AES-256-GCM 加密存储在本机密钥库（0600），不写入配置、不上传云端。</li>
+              <li>· fdu-connect 启动完成读取后，含密码的临时配置文件会立即被覆盖销毁。</li>
+              <li>· 日志与诊断包自动脱敏，不包含密码。</li>
+              <li>· App 内置 fdu-connect，无需额外安装即可使用。</li>
+            </ul>
+          </Card>
           <Card>
             <CardHeader title="fdu-connect 检测" icon={<RadioTower size={15} />} />
             {detected ? (
@@ -381,6 +394,11 @@ export function SetupCampusVpn() {
                 <div className="mt-2 break-all font-mono text-[10.5px] text-ink-muted">
                   {detected.binaryPath ?? t("setupCampus.notFound")}
                 </div>
+                {detected.binaryPath?.includes("Resources/bin") ? (
+                  <Badge tone="ok" className="mt-2">
+                    内置版本（随 App 安装）
+                  </Badge>
+                ) : null}
               </>
             ) : (
               <div className="text-[11.5px] leading-5 text-ink-muted">

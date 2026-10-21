@@ -109,6 +109,24 @@ impl Supervisor {
         let child = command
             .spawn()
             .map_err(|err| format!("启动核心失败（{}）: {err}", self.core_path.display()))?;
+        // 安全清理：核心启动后销毁含明文密码的配置与私钥资产
+        let cleanup_config = config_path.clone();
+        let cleanup_keys: Vec<PathBuf> = assets
+            .keys()
+            .filter(|relative| relative.starts_with("keys/"))
+            .map(|relative| self.workdir.join(relative))
+            .collect();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(2500));
+            if cleanup_config.exists() {
+                secure_remove(&cleanup_config);
+            }
+            for key in &cleanup_keys {
+                secure_remove(key);
+            }
+            logging::info("敏感配置文件已清理（config.yaml / keys），仅保留在核心内存中");
+        });
+
         let pid = child.id();
         inner.child = Some(child);
         inner.started_at = Some(Instant::now());
@@ -188,6 +206,21 @@ fn status_locked(log_path: &Path, inner: &mut Inner) -> CoreStatus {
             }
         }
     }
+}
+
+/// 覆盖并删除敏感文件。
+fn secure_remove(path: &Path) {
+    use std::io::Write;
+    if let Ok(metadata) = fs::metadata(path) {
+        if metadata.is_file() && metadata.len() > 0 {
+            let len = metadata.len() as usize;
+            if let Ok(mut file) = fs::OpenOptions::new().write(true).open(path) {
+                let _ = file.write_all(&vec![0u8; len.min(4096)]);
+                let _ = file.sync_all();
+            }
+        }
+    }
+    let _ = fs::remove_file(path);
 }
 
 fn now_secs() -> u64 {

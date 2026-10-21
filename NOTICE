@@ -3,17 +3,18 @@
 LabVPN 本体以 **独立进程 + 配置文件** 的方式使用下列第三方项目，不修改其源码、
 不进行静态链接。各组件版权归原作者所有，分发其二进制时须遵守对应许可证。
 
-## 运行时 sidecar（不随本仓库/安装包分发，由脚本按需获取）
+## 运行时 sidecar（随安装包分发）
 
 | 组件 | 许可证 | 上游 | 用法 |
 |---|---|---|---|
 | mihomo (Clash.Meta) | GPL-3.0 | https://github.com/MetaCubeX/mihomo | 代理核心，通过 `scripts/fetch-sidecars.mjs` 下载官方 release |
-| fdu-connect | AGPL-3.0 | https://github.com/AkiraSalvare/fdu-connect | 复旦校内 RVPN 连接器；默认发现用户自行安装的版本，或由用户自行编译 |
+| fdu-connect | AGPL-3.0 | https://github.com/AkiraSalvare/fdu-connect | 复旦校内 RVPN 连接器；**已随安装包打包**（独立进程、未修改源码）。构建 commit：`a904877f0eda0c7b1d7933ad6e80d5e8d3ffd584`；许可证随 App 提供，源码归档随 Release 附件提供 |
 | zju-connect | GPL-3.0 | https://github.com/Mythologyli/zju-connect | fdu-connect 的上游项目 |
 | EasierConnect | GPL-3.0 | https://github.com/lyc8503/EasierConnect | EasyConnect 协议逆向实现（zju-connect 前身） |
 
-> GPL/AGPL 义务：若分发 mihomo/fdu-connect 二进制，需同时提供对应源码或书面 offer。
-> LabVPN 仓库不包含上述二进制；Release 构建脚本会在构建日志中记录版本与来源。
+> GPL/AGPL 义务：mihomo 与 fdu-connect 二进制随 Release 分发；Release 页面同时提供
+> mihomo 对应版本来源、fdu-connect 对应 commit 的**完整源码归档**，并在 App 内
+> `Resources/licenses/` 附带 AGPL-3.0 许可证与 NOTICE，满足 GPL/AGPL 的源码提供义务。
 
 ## 规则数据
 
