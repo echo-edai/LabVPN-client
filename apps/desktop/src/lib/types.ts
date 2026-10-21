@@ -146,6 +146,34 @@ export interface AnalyticsData {
   updatedAt: string;
 }
 
+export interface AiExposureRecord {
+  ts: number;
+  ip: string | null;
+  node: string | null;
+  host: string;
+}
+
+export interface AiIpSegment {
+  ip: string;
+  node: string | null;
+  firstTs: number;
+  lastTs: number;
+  count: number;
+}
+
+export interface AiDomainSeries {
+  domain: string;
+  records: AiExposureRecord[];
+  segments: AiIpSegment[];
+}
+
+export interface AiExposureData {
+  range: string;
+  domains: string[];
+  series: AiDomainSeries[];
+  updatedAt: string;
+}
+
 export type NodeSelectionMode = "auto" | "manual";
 
 export interface NodeSelectionConfig {

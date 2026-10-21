@@ -491,3 +491,59 @@ pub struct AnalyticsData {
     /// 数据更新时间
     pub updated_at: String,
 }
+
+/// AI 平台单条 IP 暴露记录。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiExposureRecord {
+    /// 时间
+    pub ts: i64,
+    /// 出口 IP（未知为 None）
+    pub ip: Option<String>,
+    /// 代理节点
+    pub node: Option<String>,
+    /// 访问的主机名
+    pub host: String,
+}
+
+/// 同一 IP+节点 的连续暴露区间。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiIpSegment {
+    /// 出口 IP
+    pub ip: String,
+    /// 节点
+    pub node: Option<String>,
+    /// 区间开始
+    pub first_ts: i64,
+    /// 区间结束
+    pub last_ts: i64,
+    /// 记录次数
+    pub count: u64,
+}
+
+/// 单个 AI 平台的 IP 暴露历史。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiDomainSeries {
+    /// 平台域名
+    pub domain: String,
+    /// 最近记录（时间倒序）
+    pub records: Vec<AiExposureRecord>,
+    /// IP 区间（时间正序）
+    pub segments: Vec<AiIpSegment>,
+}
+
+/// AI 平台 IP 暴露数据。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiExposureData {
+    /// 时间范围：24h / 7d / 30d
+    pub range: String,
+    /// 已配置的 AI 平台域名
+    pub domains: Vec<String>,
+    /// 各平台暴露历史
+    pub series: Vec<AiDomainSeries>,
+    /// 数据更新时间
+    pub updated_at: String,
+}

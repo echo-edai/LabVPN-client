@@ -7,6 +7,7 @@ import { api, IpcError, isTauri, onEvent } from "@/lib/ipc";
 import { mockTrafficPoint } from "@/lib/mock";
 import { translate, type MessageKey } from "@/locales";
 import type {
+  AiExposureData,
   AnalyticsData,
   AppConfig,
   AppSnapshot,
@@ -76,6 +77,7 @@ export interface AppStore {
   proxyGroups: ProxyGroupInfo[];
   nodeCandidates: string[];
   analytics: AnalyticsData | null;
+  aiExposure: AiExposureData | null;
   analyticsRange: "24h" | "7d" | "30d";
   traffic: TrafficPoint[];
   themeMode: ThemeMode;
@@ -104,6 +106,7 @@ export interface AppStore {
   loadNodeCandidates: () => Promise<void>;
   chooseNode: (name: string) => Promise<boolean>;
   loadAnalytics: (range?: "24h" | "7d" | "30d") => Promise<void>;
+  loadAiExposure: (range?: "24h" | "7d" | "30d") => Promise<void>;
   updateAiDomains: (domains: string[]) => Promise<boolean>;
   testProxyDelay: () => Promise<void>;
   detectVpnBinary: () => Promise<ExistingVpn | null>;
@@ -156,6 +159,7 @@ export const useAppStore = create<AppStore>()((set, get) => ({
   proxyGroups: [],
   nodeCandidates: [],
   analytics: null,
+  aiExposure: null,
   analyticsRange: "24h",
   traffic: [],
   themeMode: "dark",
@@ -461,6 +465,16 @@ export const useAppStore = create<AppStore>()((set, get) => ({
     try {
       const data = await api.getAnalytics(nextRange);
       set({ analytics: data, analyticsRange: nextRange });
+    } catch (error) {
+      get().pushToast("error", get().t("toast.failed"), messageOf(error));
+    }
+  },
+
+  loadAiExposure: async (range) => {
+    const nextRange = range ?? get().analyticsRange;
+    try {
+      const data = await api.getAiExposure(nextRange);
+      set({ aiExposure: data });
     } catch (error) {
       get().pushToast("error", get().t("toast.failed"), messageOf(error));
     }

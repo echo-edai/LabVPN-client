@@ -81,6 +81,7 @@ pub fn run() {
             commands::connect::select_node,
             commands::connect::test_proxy_delay,
             commands::analytics::get_analytics,
+            commands::analytics::get_ai_exposure,
             commands::analytics::set_ai_domains,
             commands::connect::get_campus_status,
             commands::connect::set_campus_override,

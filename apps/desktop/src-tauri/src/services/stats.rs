@@ -78,6 +78,59 @@ pub struct EgressLine {
     pub node: Option<String>,
 }
 
+/// AI 平台 IP 暴露记录（JSONL）：某平台发生连接时，记录当时的节点与出口 IP。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiExposureLine {
+    /// 时间
+    pub ts: i64,
+    /// 命中的 AI 平台域名
+    pub domain: String,
+    /// 实际访问的主机名
+    pub host: String,
+    /// 代理链最终节点（DIRECT 表示未走代理）
+    pub node: Option<String>,
+    /// 该节点当时的出口 IP（未知则下次补齐）
+    pub ip: Option<String>,
+}
+
+/// 返回 AI 平台匹配到的域名（最长后缀优先）。
+fn ai_domain_of(host: &str, domains: &[String]) -> Option<String> {
+    let host = host.trim().trim_start_matches('.').to_ascii_lowercase();
+    if host.is_empty() {
+        return None;
+    }
+    domains
+        .iter()
+        .map(|domain| {
+            domain
+                .trim()
+                .trim_start_matches('.')
+                .trim_start_matches("*.")
+                .to_ascii_lowercase()
+        })
+        .filter(|domain| {
+            !domain.is_empty() && (host == *domain || host.ends_with(&format!(".{domain}")))
+        })
+        .max_by_key(String::len)
+}
+
+/// 从代理链中取出最终节点名（排除组名与 DIRECT）。
+fn final_node(chains: &[String]) -> Option<String> {
+    chains
+        .iter()
+        .rev()
+        .find(|chain| {
+            !chain.starts_with('🚀')
+                && !chain.starts_with('♻')
+                && !chain.starts_with('🐟')
+                && !chain.starts_with('🎓')
+                && !chain.starts_with('🐧')
+                && !chain.starts_with('🛑')
+        })
+        .cloned()
+}
+
 /// 分流类别。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Category {
@@ -115,21 +168,6 @@ fn classify(chains: &[String]) -> Category {
     } else {
         Category::Other
     }
-}
-
-fn is_ai_host(host: &str, domains: &[String]) -> bool {
-    let host = host.trim().to_ascii_lowercase();
-    if host.is_empty() {
-        return false;
-    }
-    domains.iter().any(|domain| {
-        let domain = domain
-            .trim()
-            .trim_start_matches('.')
-            .trim_start_matches("*.")
-            .to_ascii_lowercase();
-        !domain.is_empty() && (host == domain || host.ends_with(&format!(".{domain}")))
-    })
 }
 
 fn day_file(dir: &Path, prefix: &str) -> PathBuf {
@@ -228,6 +266,10 @@ pub fn spawn(app: AppHandle) {
         let mut seen_connections: std::collections::HashSet<String> =
             std::collections::HashSet::new();
         let mut pending = TrafficLine::default();
+        // 最近一次代理出口 IP：用于给 AI 暴露记录精确落 IP
+        let mut latest_proxy_ip: Option<(i64, String)> = None;
+        // 节流：同一（平台, 节点, IP）每 60 秒最多记录一次
+        let mut last_ai_record: HashMap<(String, String), i64> = HashMap::new();
         let mut last_egress: Option<Instant> = None;
         let mut last_write = Instant::now();
         let mut last_campus: Option<bool> = None;
@@ -268,11 +310,53 @@ pub fn spawn(app: AppHandle) {
                             }
                             let category = classify(&connection.chains);
                             category.add(&mut pending, up, down);
-                            if is_ai_host(&connection.host, &analytics.ai_domains) {
+                            if let Some(domain) =
+                                ai_domain_of(&connection.host, &analytics.ai_domains)
+                            {
                                 pending.ai.up += up;
                                 pending.ai.down += down;
                                 if seen_connections.insert(connection.id.clone()) {
                                     pending.ai_requests += 1;
+                                }
+                                // 按（平台, 节点）节流记录，节点切换会立即产生新记录
+                                let node = final_node(&connection.chains);
+                                let node_key = node.clone().unwrap_or_else(|| "DIRECT".to_string());
+                                let now_ts = Utc::now().timestamp();
+                                let key = (domain.clone(), node_key.clone());
+                                let due = last_ai_record
+                                    .get(&key)
+                                    .map(|ts| now_ts - *ts >= 60)
+                                    .unwrap_or(true);
+                                if due {
+                                    // 出口 IP 过旧则立即查询一次
+                                    let fresh = match &latest_proxy_ip {
+                                        Some((ts, _)) if now_ts - *ts <= 120 => {
+                                            latest_proxy_ip.clone().map(|(_, ip)| ip)
+                                        }
+                                        _ => {
+                                            let ip =
+                                                query_egress_ip(Some(config.engine.mixed_port))
+                                                    .await;
+                                            if let Some(ip) = &ip {
+                                                latest_proxy_ip = Some((now_ts, ip.clone()));
+                                            }
+                                            ip
+                                        }
+                                    };
+                                    append_line(
+                                        &day_file(&state.paths.stats_dir, "ai-exposure"),
+                                        &AiExposureLine {
+                                            ts: now_ts,
+                                            domain,
+                                            host: connection.host.clone(),
+                                            node: node.clone(),
+                                            ip: fresh,
+                                        },
+                                    );
+                                    last_ai_record.insert(key, now_ts);
+                                    if last_ai_record.len() > 2000 {
+                                        last_ai_record.clear();
+                                    }
                                 }
                             }
                         }

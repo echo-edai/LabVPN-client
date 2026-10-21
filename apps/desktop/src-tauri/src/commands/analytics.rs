@@ -7,10 +7,11 @@ use chrono::{Local, TimeZone};
 use tauri::State;
 
 use crate::dto::{
-    AnalyticsData, CampusPointDto, CategoryBytes, CategoryTotals, EgressSampleDto, TrafficBucketDto,
+    AiDomainSeries, AiExposureData, AiExposureRecord, AiIpSegment, AnalyticsData, CampusPointDto,
+    CategoryBytes, CategoryTotals, EgressSampleDto, TrafficBucketDto,
 };
 use crate::error::CmdResult;
-use crate::services::stats::{EgressLine, TrafficLine};
+use crate::services::stats::{AiExposureLine, EgressLine, TrafficLine};
 use crate::state::AppState;
 
 fn read_jsonl<T: serde::de::DeserializeOwned>(dir: &Path, prefix: &str, since_day: i64) -> Vec<T> {
@@ -178,4 +179,89 @@ pub fn set_ai_domains(state: State<'_, AppState>, domains: Vec<String>) -> CmdRe
         format!("AI 平台域名已更新：{} 个", normalized.len()),
     );
     Ok(normalized)
+}
+
+/// AI 平台 IP 暴露历史（按平台分组，记录节点与出口 IP 变化）。
+#[tauri::command]
+pub fn get_ai_exposure(
+    state: State<'_, AppState>,
+    range: Option<String>,
+) -> CmdResult<AiExposureData> {
+    let range = range.unwrap_or_else(|| "24h".to_string());
+    let now = Local::now().timestamp();
+    let since = match range.as_str() {
+        "7d" => now - 7 * 86_400,
+        "30d" => now - 30 * 86_400,
+        _ => now - 86_400,
+    };
+    let lines: Vec<AiExposureLine> = read_jsonl(&state.paths.stats_dir, "ai-exposure", since);
+    let config_domains = state.config_snapshot().analytics.ai_domains;
+
+    // 平台 → 记录（按时间正序）
+    let mut grouped: std::collections::BTreeMap<String, Vec<AiExposureLine>> =
+        std::collections::BTreeMap::new();
+    for line in lines.iter().filter(|line| line.ts >= since) {
+        grouped
+            .entry(line.domain.clone())
+            .or_default()
+            .push(line.clone());
+    }
+
+    let mut domains: Vec<String> = config_domains.clone();
+    for domain in grouped.keys() {
+        if !domains.contains(domain) {
+            domains.push(domain.clone());
+        }
+    }
+    domains.sort();
+    domains.dedup();
+
+    let series = domains
+        .iter()
+        .map(|domain| {
+            let mut items = grouped.get(domain).cloned().unwrap_or_default();
+            items.sort_by_key(|item| item.ts);
+            let mut segments: Vec<AiIpSegment> = Vec::new();
+            for item in &items {
+                let ip = item.ip.clone().unwrap_or_else(|| "未知".to_string());
+                match segments.last_mut() {
+                    Some(segment) if segment.ip == ip && segment.node == item.node => {
+                        segment.last_ts = item.ts;
+                        segment.count += 1;
+                    }
+                    _ => segments.push(AiIpSegment {
+                        ip,
+                        node: item.node.clone(),
+                        first_ts: item.ts,
+                        last_ts: item.ts,
+                        count: 1,
+                    }),
+                }
+            }
+            let mut records: Vec<AiExposureRecord> = items
+                .iter()
+                .rev()
+                .take(200)
+                .map(|item| AiExposureRecord {
+                    ts: item.ts,
+                    ip: item.ip.clone(),
+                    node: item.node.clone(),
+                    host: item.host.clone(),
+                })
+                .collect();
+            records.sort_by_key(|record| std::cmp::Reverse(record.ts));
+            AiDomainSeries {
+                domain: domain.clone(),
+                records,
+                segments,
+            }
+        })
+        .collect();
+
+    Ok(AiExposureData {
+        range,
+        domains,
+        series,
+        updated_at: Local::now().to_rfc3339(),
+    })
 }

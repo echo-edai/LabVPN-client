@@ -8,6 +8,8 @@
  */
 import { GROUP, SECRET_KEYS } from "@/lib/constants";
 import type {
+  AiDomainSeries,
+  AiExposureData,
   AnalyticsData,
   AppConfig,
   AppSnapshot,
@@ -430,6 +432,62 @@ const trafficEngine = (): ProxyGroupInfo[] =>
   proxyGroups().filter((group) => group.kind === "Selector");
 
 /** Mock 命令分发。 */
+function mockAiExposure(range: string): AiExposureData {
+  const now = Math.floor(Date.now() / 1000);
+  const hour = 3600;
+  const definitions: Record<string, { ip: string; node: string; hoursAgo: number; durationMin: number; host: string }[]> = {
+    "chatgpt.com": [
+      { ip: "203.0.113.20", node: "HK-01", hoursAgo: 20, durationMin: 240, host: "chatgpt.com" },
+      { ip: "203.0.113.22", node: "🇯🇵 日本 02", hoursAgo: 8, durationMin: 90, host: "chatgpt.com" },
+      { ip: "203.0.113.20", node: "HK-01", hoursAgo: 3, durationMin: 120, host: "chatgpt.com" },
+    ],
+    "openai.com": [
+      { ip: "203.0.113.20", node: "HK-01", hoursAgo: 18, durationMin: 120, host: "api.openai.com" },
+      { ip: "198.51.100.7", node: "🇸🇬 新加坡 03", hoursAgo: 6, durationMin: 60, host: "platform.openai.com" },
+    ],
+    "claude.ai": [
+      { ip: "203.0.113.31", node: "🇺🇸 美国 01", hoursAgo: 12, durationMin: 180, host: "claude.ai" },
+    ],
+    "anthropic.com": [
+      { ip: "203.0.113.31", node: "🇺🇸 美国 01", hoursAgo: 11, durationMin: 30, host: "anthropic.com" },
+    ],
+    "gemini.google.com": [],
+  };
+  const series: AiDomainSeries[] = Object.entries(definitions).map(([domain, entries]) => {
+    const records = entries
+      .map((entry) => ({
+        ts: now - entry.hoursAgo * hour,
+        ip: entry.ip,
+        node: entry.node,
+        host: entry.host,
+      }))
+      .sort((a, b) => a.ts - b.ts);
+    const segments: AiDomainSeries["segments"] = [];
+    for (const record of records) {
+      const last = segments[segments.length - 1];
+      if (last && last.ip === record.ip && last.node === record.node) {
+        last.lastTs = record.ts;
+        last.count += 1;
+      } else {
+        segments.push({
+          ip: record.ip,
+          node: record.node,
+          firstTs: record.ts,
+          lastTs: record.ts + (definitions[domain]?.[segments.length]?.durationMin ?? 60) * 60,
+          count: 1,
+        });
+      }
+    }
+    return { domain, records: [...records].reverse(), segments };
+  });
+  return {
+    range,
+    domains: Object.keys(definitions),
+    series,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 function mockAnalytics(range: string): AnalyticsData {
   const now = Math.floor(Date.now() / 1000);
   const hourly = range === "24h";
@@ -585,6 +643,9 @@ export async function mockInvoke(cmd: string, args?: Record<string, unknown>): P
       return engine;
     case "get_proxy_groups":
       return engine.running ? trafficEngine() : [];
+    case "get_ai_exposure": {
+      return mockAiExposure(String(args?.range ?? "24h"));
+    }
     case "get_analytics": {
       const range = String(args?.range ?? "24h");
       return mockAnalytics(range);
