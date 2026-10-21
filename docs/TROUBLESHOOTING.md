@@ -94,3 +94,34 @@
 4. 复现步骤与期望行为。
 
 提交到 <https://github.com/echo-edai/LabVPN-client/issues>。
+
+## 核心启动失败 / 控制端口未就绪
+
+**现象**：提示「核心控制端口未就绪（60s 超时）」或「混合代理端口未监听」。
+
+**原因与处理**：
+
+1. **端口被其他代理软件占用**（最常见）：
+   ```bash
+   lsof -nP -iTCP -sTCP:LISTEN | grep -E ":(7897|9097|1080|11080)"
+   ```
+   - macOS：退出 Clash Verge / Shadowrocket / Surge 等；用 `scutil --proxy` 确认系统代理已关闭
+   - Windows：退出 Clash for Windows / v2rayN / 其他 mihomo 客户端
+   - 新版 LabVPN 会自动避让被占用端口（日志/提示中会说明本次使用的端口），也可以
+     在「设置 → 引擎」里手动改混合端口与控制端口。
+2. **上次异常退出遗留核心进程**：新版启动时会自动清理（校验 PID 文件 + 进程名）。
+   手动处理：`pkill -f "app.labvpn.desktop/core/config.yaml"`。
+3. **首次启动 geodata 下载慢**：v0.1.2 起 App 已内置 GeoSite.dat / geoip.metadb，不再联网下载。
+4. **权限问题**：直接模式不需要 root；TUN 模式必须先安装特权 helper（设置页）。
+
+排查顺序：日志页看 `core` 源的最后几行 → 确认端口占用 → 关闭其他代理软件 → 重试。
+
+## 校园网置信度偏低
+
+置信度 = 各信号（校内 IP 段 / 校园内网探针 / 复旦 Wi-Fi SSID）加权比例。
+
+- 只要**任一确定性信号**命中（校内 IP、复旦 SSID、任一校园内网探针可达），置信度**至少 90%**。
+- 若通过**路由器 NAT 上网**（本机 IP 是 192.168.x 等），IP 段信号不命中，但内网探针可达时
+  仍会正确判定为「校内」并给出 ≥90% 置信度。
+- 如果置信度低且判定为校外：检查是否有第三方 TUN（Shadowrocket/Clash Verge）劫持流量；
+  LabVPN 的探针会绑定物理网卡绕过 TUN，但建议测试时只保留一个 TUN。

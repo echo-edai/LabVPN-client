@@ -27,8 +27,9 @@ struct Inner {
 }
 
 impl Supervisor {
-    /// 创建托管器（不启动）。
+    /// 创建托管器（不启动），并清理上次异常退出遗留的核心进程。
     pub fn new(core_path: PathBuf, workdir: PathBuf) -> Self {
+        cleanup_stale(&workdir);
         let log_path = workdir.join("core.log");
         Self {
             core_path,
@@ -59,6 +60,7 @@ impl Supervisor {
                 _ => {
                     inner.child = None;
                     inner.started_at = None;
+                    remove_pid_file(&self.workdir);
                 }
             }
         }
@@ -70,6 +72,16 @@ impl Supervisor {
         for (name, content) in labvpn_core::rules::providers::builtin_rule_files() {
             write_file(&rules_dir.join(name), content.as_bytes(), false)
                 .map_err(|err| format!("写入内置规则失败: {err}"))?;
+        }
+        // 内置 geodata（避免 mihomo 首次启动联网下载）
+        if let Some(bin_dir) = self.core_path.parent() {
+            for name in ["GeoSite.dat", "geoip.metadb"] {
+                let source = bin_dir.join(name);
+                let target = self.workdir.join(name);
+                if source.is_file() && !target.exists() {
+                    let _ = fs::copy(&source, &target);
+                }
+            }
         }
         // 附加资源（订阅缓存 / SSH 私钥等）
         for (rel, content) in assets {
@@ -128,6 +140,7 @@ impl Supervisor {
         });
 
         let pid = child.id();
+        let _ = fs::write(self.workdir.join("mihomo.pid"), format!("{pid}\n"));
         inner.child = Some(child);
         inner.started_at = Some(Instant::now());
         inner.last_error = None;
@@ -150,6 +163,7 @@ impl Supervisor {
             let _ = child.wait();
             logging::info(format!("核心已停止 pid={pid}"));
         }
+        remove_pid_file(&self.workdir);
         inner.started_at = None;
         status_locked(&self.log_path, &mut inner)
     }
@@ -257,6 +271,80 @@ fn write_file(path: &Path, content: &[u8], private: bool) -> std::io::Result<()>
         let _ = private;
     }
     Ok(())
+}
+
+/// 清理上次异常退出遗留的核心进程与含密码配置。
+fn cleanup_stale(workdir: &Path) {
+    let pid_file = workdir.join("mihomo.pid");
+    if let Ok(text) = fs::read_to_string(&pid_file) {
+        if let Ok(pid) = text.trim().parse::<u32>() {
+            if pid_alive(pid) && process_is_core(pid) {
+                kill_pid(pid);
+                logging::warn(format!("已清理遗留核心进程 pid={pid}"));
+            }
+        }
+    }
+    remove_pid_file(workdir);
+    let config = workdir.join("config.yaml");
+    if config.exists() {
+        secure_remove(&config);
+    }
+}
+
+fn remove_pid_file(workdir: &Path) {
+    let _ = fs::remove_file(workdir.join("mihomo.pid"));
+}
+
+#[cfg(unix)]
+fn process_is_core(pid: u32) -> bool {
+    Command::new("ps")
+        .args(["-p", &pid.to_string(), "-o", "command="])
+        .output()
+        .map(|output| {
+            String::from_utf8_lossy(&output.stdout)
+                .to_ascii_lowercase()
+                .contains("mihomo")
+        })
+        .unwrap_or(false)
+}
+
+#[cfg(windows)]
+fn process_is_core(pid: u32) -> bool {
+    Command::new("tasklist")
+        .args(["/FI", &format!("PID eq {pid}"), "/NH"])
+        .output()
+        .map(|output| {
+            String::from_utf8_lossy(&output.stdout)
+                .to_ascii_lowercase()
+                .contains("mihomo")
+        })
+        .unwrap_or(false)
+}
+
+#[cfg(unix)]
+fn pid_alive(pid: u32) -> bool {
+    Command::new("kill")
+        .args(["-0", &pid.to_string()])
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
+}
+
+#[cfg(windows)]
+fn pid_alive(pid: u32) -> bool {
+    process_is_core(pid)
+}
+
+#[cfg(unix)]
+fn kill_pid(pid: u32) {
+    let _ = Command::new("kill").args(["-9", &pid.to_string()]).status();
+}
+
+#[cfg(windows)]
+fn kill_pid(pid: u32) {
+    let _ = Command::new("taskkill")
+        .args(["/PID", &pid.to_string(), "/F"])
+        .status();
 }
 
 #[cfg(test)]

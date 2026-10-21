@@ -186,6 +186,27 @@ async function fetchMihomo() {
   }
 }
 
+/** 内置 geodata：mihomo 首启无需联网下载 GeoSite/MMDB（避免 20s+ 启动超时）。 */
+async function fetchGeoData() {
+  const assets = [
+    { name: "GeoSite.dat", url: `${RELEASE_BASE}/GeoSite.dat` },
+    { name: "geoip.metadb", url: `${RELEASE_BASE}/geoip.metadb` },
+  ];
+  for (const asset of assets) {
+    const target = join(BIN_DIR, asset.name);
+    if (existsSync(target) && statSync(target).size > 0 && !force) {
+      log(`${asset.name} 已存在，跳过`);
+      continue;
+    }
+    try {
+      await download(asset.url, target);
+    } catch (error) {
+      log(`⚠️ 下载 ${asset.name} 失败（离线？）：${error && error.message ? error.message : error}`);
+      log("   mihomo 将退回首次启动时自动下载（可能较慢）");
+    }
+  }
+}
+
 async function fetchWintun() {
   if (!isWindows) {
     writeFileSync(join(BIN_DIR, "wintun.dll"), "");
@@ -321,6 +342,7 @@ async function main() {
   mkdirSync(BIN_DIR, { recursive: true });
   await fetchMihomo();
   await fetchWintun();
+  await fetchGeoData();
   await fetchFduConnect();
   if (withHelper) buildHelper();
   writeManifest();

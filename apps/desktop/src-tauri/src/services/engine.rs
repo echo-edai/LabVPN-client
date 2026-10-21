@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 use labvpn_core::generator::GeneratedConfig;
 use labvpn_core::ipc::Command as HelperCommand;
 use labvpn_core::rules::names;
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::Mutex;
@@ -67,6 +67,7 @@ pub struct StartRequest {
 struct Inner {
     status: EngineStatus,
     child: Option<Child>,
+    pid_file: Option<PathBuf>,
     api: Option<MihomoApi>,
     traffic_task: Option<tokio::task::JoinHandle<()>>,
     log_task: Option<tokio::task::JoinHandle<()>>,
@@ -91,6 +92,7 @@ impl EngineManager {
             inner: Mutex::new(Inner {
                 status: EngineStatus::idle(mixed_port, controller_port),
                 child: None,
+                pid_file: None,
                 api: None,
                 traffic_task: None,
                 log_task: None,
@@ -183,6 +185,8 @@ impl EngineManager {
                     "找不到 mihomo 核心二进制，请先运行 `npm run sidecars` 或安装核心",
                 )
             })?;
+            // 清理上一次异常退出遗留的核心进程与含密码的配置
+            cleanup_stale_core(&request.workdir);
             self.prepare_direct_workdir(
                 &request.workdir,
                 &request.config_path,
@@ -221,6 +225,11 @@ impl EngineManager {
                 }
             });
             let pid = child.id();
+            let pid_file = request.workdir.join("mihomo.pid");
+            if let Some(pid_value) = pid {
+                let _ = std::fs::write(&pid_file, format!("{pid_value}\n"));
+            }
+            inner.pid_file = Some(pid_file);
             inner.child = Some(child);
             inner.status.pid = pid;
             self.logs.info(
@@ -234,8 +243,8 @@ impl EngineManager {
             );
         }
 
-        // 等待控制 API 就绪（最多 20s）
-        let deadline = Instant::now() + Duration::from_secs(20);
+        // 等待控制 API 就绪（最多 60s；首次启动可能需要加载 geodata）
+        let deadline = Instant::now() + Duration::from_secs(60);
         let mut version = None;
         while Instant::now() < deadline {
             if let Some(child) = inner.child.as_mut() {
@@ -257,7 +266,22 @@ impl EngineManager {
             }
         }
         let Some(version) = version else {
-            let message = "核心控制端口未就绪（20s 超时），请检查端口占用与配置".to_string();
+            let recent: Vec<String> = self
+                .logs
+                .recent(6)
+                .iter()
+                .map(|entry| entry.message.clone())
+                .collect();
+            let message = format!(
+                "核心控制端口 {} 未就绪（60s 超时）：可能被其他代理软件占用或核心启动失败。\
+                 请先关闭 Clash Verge / Shadowrocket 等代理软件后重试。最近日志：{}",
+                request.controller_port,
+                if recent.is_empty() {
+                    "（无）".to_string()
+                } else {
+                    recent.join(" | ")
+                }
+            );
             inner.status.state = "error".to_string();
             inner.status.last_error = Some(message.clone());
             self.emit_status(&inner.status);
@@ -271,6 +295,22 @@ impl EngineManager {
                 request.controller_port
             ),
         );
+
+        // 混合端口必须真正监听，否则流量无法走代理（常见于端口被 Clash Verge 等占用）
+        if !wait_port_open(request.mixed_port, Duration::from_secs(5)).await {
+            let message = format!(
+                "混合代理端口 {} 未监听：大概率被其他代理软件占用（请关闭 Clash Verge / Shadowrocket / 其他 mihomo），\
+                 或在「设置」中换一个端口",
+                request.mixed_port
+            );
+            self.logs.error("core", message.clone());
+            inner.status.state = "error".to_string();
+            inner.status.last_error = Some(message.clone());
+            inner.status.running = false;
+            self.emit_status(&inner.status);
+            self.cleanup_locked(&mut inner).await;
+            return Err(CommandError::new("engine", message));
+        }
 
         // 安全清理：核心已完成配置解析，销毁含敏感字段的配置与私钥资产
         if request.mode == EngineMode::SystemProxy {
@@ -337,6 +377,9 @@ impl EngineManager {
         }
         if let Some(task) = inner.log_task.take() {
             task.abort();
+        }
+        if let Some(pid_file) = inner.pid_file.take() {
+            let _ = std::fs::remove_file(pid_file);
         }
         if inner.attached && !inner.helper_token.is_empty() && inner.helper_port != 0 {
             let port = inner.helper_port;
@@ -420,6 +463,16 @@ impl EngineManager {
         for (file, content) in labvpn_core::rules::providers::builtin_rule_files() {
             std::fs::write(workdir.join("rules").join(file), content)?;
         }
+        // 内置 geodata：避免 mihomo 首次启动联网下载数十 MB 导致就绪超时
+        if let Ok(resource_dir) = self.app.path().resource_dir() {
+            for name in ["GeoSite.dat", "geoip.metadb"] {
+                let source = resource_dir.join("bin").join(name);
+                let target = workdir.join(name);
+                if source.is_file() && !target.exists() {
+                    let _ = std::fs::copy(&source, &target);
+                }
+            }
+        }
         for (rel, content) in assets {
             let rel_path = Path::new(rel);
             if rel_path.is_absolute() || rel.split(['/', '\\']).any(|segment| segment == "..") {
@@ -469,4 +522,94 @@ fn secure_remove(path: &Path) {
         }
     }
     let _ = std::fs::remove_file(path);
+}
+
+/// 清理上次异常退出遗留的核心进程（读取工作目录下的 PID 文件）与含密码的配置。
+pub fn cleanup_stale_core(workdir: &Path) {
+    let pid_file = workdir.join("mihomo.pid");
+    if let Ok(text) = std::fs::read_to_string(&pid_file) {
+        if let Ok(pid) = text.trim().parse::<u32>() {
+            if pid_alive(pid) && process_is_core(pid) {
+                kill_pid(pid);
+            }
+        }
+        let _ = std::fs::remove_file(&pid_file);
+    }
+    let config = workdir.join("config.yaml");
+    if config.exists() {
+        secure_remove(&config);
+    }
+}
+
+/// 等待本地端口可连接。
+async fn wait_port_open(port: u16, timeout: Duration) -> bool {
+    let deadline = Instant::now() + timeout;
+    while Instant::now() < deadline {
+        if tokio::net::TcpStream::connect(("127.0.0.1", port))
+            .await
+            .is_ok()
+        {
+            return true;
+        }
+        tokio::time::sleep(Duration::from_millis(150)).await;
+    }
+    false
+}
+
+#[cfg(unix)]
+fn process_is_core(pid: u32) -> bool {
+    std::process::Command::new("ps")
+        .args(["-p", &pid.to_string(), "-o", "command="])
+        .output()
+        .map(|output| {
+            String::from_utf8_lossy(&output.stdout)
+                .to_ascii_lowercase()
+                .contains("mihomo")
+        })
+        .unwrap_or(false)
+}
+
+#[cfg(windows)]
+fn process_is_core(pid: u32) -> bool {
+    Command::new("tasklist")
+        .args(["/FI", &format!("PID eq {pid}"), "/NH"])
+        .output()
+        .map(|output| {
+            String::from_utf8_lossy(&output.stdout)
+                .to_ascii_lowercase()
+                .contains("mihomo")
+        })
+        .unwrap_or(false)
+}
+
+#[cfg(unix)]
+fn pid_alive(pid: u32) -> bool {
+    std::process::Command::new("kill")
+        .args(["-0", &pid.to_string()])
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
+}
+
+#[cfg(windows)]
+fn pid_alive(pid: u32) -> bool {
+    Command::new("tasklist")
+        .args(["/FI", &format!("PID eq {pid}"), "/NH"])
+        .output()
+        .map(|output| String::from_utf8_lossy(&output.stdout).contains(&pid.to_string()))
+        .unwrap_or(false)
+}
+
+#[cfg(unix)]
+fn kill_pid(pid: u32) {
+    let _ = std::process::Command::new("kill")
+        .args(["-9", &pid.to_string()])
+        .status();
+}
+
+#[cfg(windows)]
+fn kill_pid(pid: u32) {
+    let _ = std::process::Command::new("taskkill")
+        .args(["/PID", &pid.to_string(), "/F"])
+        .status();
 }

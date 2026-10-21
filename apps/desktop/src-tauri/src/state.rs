@@ -55,6 +55,8 @@ impl AppState {
     /// 初始化状态（加载配置、密钥、解析核心）。
     pub fn new(app: &AppHandle) -> CmdResult<Self> {
         let paths = AppPaths::init(app)?;
+        // 清理上次异常退出遗留的核心进程，避免端口被旧进程占用
+        crate::services::engine::cleanup_stale_core(&paths.core_dir);
         let logs = Arc::new(LogStore::new(&paths.app_log_file));
         let (config, warnings) = config_service::load(&paths);
         for warning in &warnings {

@@ -34,7 +34,7 @@ struct BuiltRuntime {
 
 /// 连接：检测校园网 → 启动 VPN（必要时）→ 生成配置 → 启动核心 → 切换分组 → 系统代理。
 pub async fn connect(state: &AppState) -> CmdResult<ConnectResult> {
-    let config = state.config_snapshot();
+    let mut config = state.config_snapshot();
     let errors: Vec<String> = config
         .validate()
         .into_iter()
@@ -47,6 +47,16 @@ pub async fn connect(state: &AppState) -> CmdResult<ConnectResult> {
         );
     }
 
+    let mut warnings: Vec<String> = Vec::new();
+
+    // 0) 清理上次异常退出遗留的核心（避免端口被自己的旧进程占用）
+    crate::services::engine::cleanup_stale_core(&state.paths.core_dir);
+
+    // 0.5) 端口冲突自动避让（Clash Verge / Shadowrocket / 其他 mihomo 常占用 7897）
+    if !state.engine.is_running().await {
+        choose_ports(&mut config, &mut warnings);
+    }
+
     // 1) 校园网检测
     let campus_status = if config.campus_vpn.auto_detect_campus {
         campus::detect(state).await
@@ -57,7 +67,6 @@ pub async fn connect(state: &AppState) -> CmdResult<ConnectResult> {
     events::emit(&state.app, events::CAMPUS_STATUS, campus_status.clone());
     let on_campus = campus_status.on_campus;
     let skip_vpn = config.campus_vpn.skip_when_on_campus && on_campus;
-    let mut warnings: Vec<String> = Vec::new();
 
     // 2) 校内 VPN
     let vpn_status = if !config.campus_vpn.enabled {
@@ -480,4 +489,30 @@ pub async fn rule_plan(state: &AppState) -> CmdResult<labvpn_core::rules::RulePl
     .await?;
     let generated = generator::generate(&config, &built.context)?;
     Ok(generated.plan)
+}
+
+/// 端口被其他程序占用时自动切换到邻近空闲端口，并给出提示。
+fn choose_ports(config: &mut AppConfig, warnings: &mut Vec<String>) {
+    config.engine.mixed_port = pick_free_port(config.engine.mixed_port, "混合代理端口", warnings);
+    config.engine.controller_port =
+        pick_free_port(config.engine.controller_port, "控制端口", warnings);
+}
+
+fn pick_free_port(preferred: u16, label: &str, warnings: &mut Vec<String>) -> u16 {
+    if !platform::port_in_use(preferred) {
+        return preferred;
+    }
+    let upper = preferred.saturating_add(50).min(u16::MAX - 1);
+    for candidate in preferred.saturating_add(1)..=upper {
+        if candidate > 1024 && !platform::port_in_use(candidate) {
+            warnings.push(format!(
+                "{label} {preferred} 已被其他程序占用，本次连接自动使用 {candidate}（可在设置中修改）"
+            ));
+            return candidate;
+        }
+    }
+    warnings.push(format!(
+        "{label} {preferred} 被占用且附近没有可用端口，请手动修改端口"
+    ));
+    preferred
 }

@@ -437,16 +437,23 @@ fn score(signals: &[SignalResult]) -> (bool, f32) {
     } else {
         positive as f32 / total as f32
     };
-    // 强信号：本地 IP 段命中 / 复旦 SSID / 高权重探针成功
-    let strong = signals
+    // 强信号：本地 IP 段命中 / 复旦 SSID / 高权重内网探针成功
+    let local_evidence = signals
         .iter()
-        .any(|signal| signal.ok && matches!(signal.kind, SignalKind::IpRange | SignalKind::Wifi))
-        || signals
-            .iter()
-            .any(|signal| signal.ok && signal.weight >= 90);
+        .any(|signal| signal.ok && matches!(signal.kind, SignalKind::IpRange | SignalKind::Wifi));
+    let probe_evidence = signals
+        .iter()
+        .any(|signal| signal.ok && signal.weight >= 90);
+    let strong = local_evidence || probe_evidence;
     let on_campus = strong || ratio >= 0.5;
     let confidence = if on_campus {
-        ratio.clamp(0.6, 1.0)
+        if strong {
+            // 已有确定性证据（校内 IP/复旦 SSID/可达的校园内网探针），
+            // 即使其余信号失败（如经 NAT 路由器上网、魔改 TUN 干扰）也保持高置信度。
+            ratio.clamp(0.9, 1.0)
+        } else {
+            ratio.clamp(0.6, 0.89)
+        }
     } else {
         ratio.min(0.5)
     };
@@ -580,6 +587,11 @@ mod tests {
         };
         let status = detect_with(&runner, &ifaces, &input);
         assert!(status.on_campus);
+        assert!(
+            status.confidence >= 0.9,
+            "校园内网探针可达应给出高置信度：{:#?}",
+            status.signals
+        );
         assert!(status
             .signals
             .iter()
