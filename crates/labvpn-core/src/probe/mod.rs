@@ -703,7 +703,7 @@ mod tests {
             ),
         ];
         let subnets = local_subnets(&ifaces);
-        assert_eq!(subnets, vec!["10.188.192.0/19"]);
+        assert_eq!(subnets, vec!["10.188.0.0/19"]);
     }
 
     #[test]
