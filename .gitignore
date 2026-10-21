@@ -33,3 +33,7 @@ Thumbs.db
 
 # 本地运行时验证目录
 /.runtime-home/
+
+# 本地小红书发布工具临时目录（含登录态，勿提交）
+/.xhs-home/
+/.xhs-post/
