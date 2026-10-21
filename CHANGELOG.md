@@ -2,7 +2,17 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [0.1.6] — 预发布（当前）
+## [0.1.7] — 预发布（当前）
+
+### Changed
+- **兜底组「🐟 漏网之鱼」默认改为 DIRECT**（仍可手动切换到代理），未命中规则的流量默认直连
+- **新增更细的国内直连 / 国外代理规则**，减少流量落到兜底组：
+  - `DOMAIN-SUFFIX,cn,DIRECT`、内置 `ChinaDomainFallback` 规则集直连
+  - `GEOSITE,cn` + `GEOIP,CN` 直连（原有）
+  - `GEOSITE,geolocation-!cn → 🚀 代理`：国外域名显式走订阅代理，而不是依赖兜底组
+- 隐藏 mihomo 内置 `GLOBAL` 组（规则模式下不参与分流，避免误解）
+
+## [0.1.6] — 预发布
 
 ### Changed
 - **AI 平台 IP 暴露重新实现**：不再展示全局代理出口 IP 冒充平台 IP。

@@ -307,7 +307,7 @@ fn build_providers(config: &AppConfig) -> Vec<ProviderSpec> {
             "./rules/adblock.yaml",
         ));
     }
-    if !config.routing.geo_rules && config.routing.preset != RoutingPreset::Minimal {
+    if config.routing.preset != RoutingPreset::Minimal {
         providers.push(ProviderSpec::local(
             CHINA_DOMAIN_FALLBACK,
             "classical",
@@ -395,10 +395,10 @@ fn build_groups(config: &AppConfig, ctx: &RuleContext) -> Vec<GroupSpec> {
         ));
     }
 
-    // 兜底组
+    // 兜底组：默认直连（用户可手动切换到代理）
     groups.push(GroupSpec::select(
         names::GROUP_FINAL,
-        &[names::GROUP_PROXY, names::DIRECT],
+        &[names::DIRECT, names::GROUP_PROXY],
     ));
 
     groups
@@ -553,6 +553,12 @@ fn push_custom(
 }
 
 fn push_china(rules: &mut Vec<String>, config: &AppConfig, warnings: &mut Vec<String>) {
+    // 显式国内规则：尽量在「漏网之鱼」之前命中，避免国内流量误落兜底组
+    push_unique(rules, format!("DOMAIN-SUFFIX,cn,{}", names::DIRECT));
+    push_unique(
+        rules,
+        format!("RULE-SET,{CHINA_DOMAIN_FALLBACK},{}", names::DIRECT),
+    );
     if config.routing.enhanced_rules {
         push_unique(
             rules,
@@ -562,11 +568,12 @@ fn push_china(rules: &mut Vec<String>, config: &AppConfig, warnings: &mut Vec<St
     if config.routing.geo_rules {
         push_unique(rules, format!("GEOSITE,cn,{}", names::DIRECT));
         push_unique(rules, format!("GEOIP,CN,{},no-resolve", names::DIRECT));
-    } else {
+        // 国外流量显式走代理组，避免落到兜底组
         push_unique(
             rules,
-            format!("RULE-SET,{CHINA_DOMAIN_FALLBACK},{}", names::DIRECT),
+            format!("GEOSITE,geolocation-!cn,{}", names::GROUP_PROXY),
         );
+    } else {
         warnings.push("已关闭 geo 规则：国内 IP 直连能力受限，仅使用内置域名兜底".to_string());
     }
 }
@@ -651,6 +658,35 @@ mod tests {
             rules.last().expect("last rule"),
             &format!("MATCH,{}", names::GROUP_FINAL)
         );
+    }
+
+    #[test]
+    fn domestic_rules_and_final_direct_default() {
+        let plan = build(&base_config(), &context());
+        let rules = &plan.rules;
+        let pos = |needle: &str| {
+            rules
+                .iter()
+                .position(|rule| rule.contains(needle))
+                .unwrap_or_else(|| panic!("缺少规则 {needle}: {rules:#?}"))
+        };
+        assert!(pos("DOMAIN-SUFFIX,cn,DIRECT") < pos("GEOIP,CN,DIRECT"));
+        assert!(pos("RULE-SET,ChinaDomainFallback,DIRECT") < pos("GEOIP,CN,DIRECT"));
+        assert!(pos("GEOIP,CN,DIRECT") < pos("GEOSITE,geolocation-!cn,🚀 代理"));
+        assert!(pos("GEOSITE,geolocation-!cn") < pos("MATCH,"));
+        // 兜底组默认直连，可手动切代理
+        let final_group = plan
+            .groups
+            .iter()
+            .find(|group| group.name == names::GROUP_FINAL)
+            .expect("final group");
+        assert_eq!(
+            final_group.members.first().map(String::as_str),
+            Some(names::DIRECT)
+        );
+        assert!(final_group
+            .members
+            .contains(&names::GROUP_PROXY.to_string()));
     }
 
     #[test]

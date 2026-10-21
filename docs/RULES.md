@@ -165,6 +165,23 @@ tun:
 - 手动模式下节点列表来自本地订阅缓存（`profiles/profile.yaml` 的 `proxies`）。
 - 策略修改（模式/URL/间隔/容差）会重新生成配置并重启核心；仅切换手动节点为热切换。
 
+## 国内直连与兜底策略
+
+规则顺序（在自定义规则之后）：
+
+1. `DOMAIN-SUFFIX,cn` → DIRECT（所有 .cn 域名）
+2. 内置 `ChinaDomainFallback` 规则集 → DIRECT（常见国内站点兜底）
+3. `GEOSITE,cn` → DIRECT（国内域名库）
+4. `GEOIP,CN` → DIRECT（国内 IP 库，no-resolve）
+5. `GEOSITE,geolocation-!cn` → 🚀 代理（国外域名显式走订阅代理）
+6. `MATCH,🐟 漏网之鱼`
+
+**🐟 漏网之鱼 默认出口为 DIRECT**（可手动切换到代理）。因此未命中任何规则的流量默认直连，
+不会被动走代理；国外流量由第 5 条显式路由到订阅节点，不再依赖兜底组。
+
+> `GLOBAL` 是 mihomo 内置的全局出口组（Global 模式下使用），规则模式下不参与分流，
+> UI 已隐藏。
+
 ## 校园网判定与直连
 
 1. **Ping 校内网关**（默认 `10.134.140.1`）：ping 通 ⇒ 置信度 **100%**，判定在校内；

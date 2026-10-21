@@ -25,13 +25,15 @@ export function ProxyGroups({ limit }: { limit?: number }) {
   const testDelay = useAppStore((state) => state.testProxyDelay);
   const testing = useAppStore((state) => state.busy === "delay");
 
-  const visible = limit ? groups.slice(0, limit) : groups;
+  // mihomo 内置的 GLOBAL 组仅在 global 模式下使用，规则模式不参与分流，隐藏避免误解
+  const usable = groups.filter((group) => group.name !== "GLOBAL");
+  const visible = limit ? usable.slice(0, limit) : usable;
 
   return (
     <Card>
       <CardHeader
         title={t("dashboard.proxyGroups")}
-        subtitle={`${groups.length} groups`}
+        subtitle={`${usable.length} groups`}
         icon={<Network size={15} />}
         actions={
           <Button size="sm" variant="ghost" icon={<Zap size={12} />} loading={testing} onClick={() => void testDelay()}>

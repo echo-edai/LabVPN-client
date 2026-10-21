@@ -104,9 +104,14 @@ proxy-groups:
 - name: 🐟 漏网之鱼
   type: select
   proxies:
-  - 🚀 代理
   - DIRECT
+  - 🚀 代理
 rule-providers:
+  ChinaDomainFallback:
+    type: file
+    behavior: classical
+    format: yaml
+    path: ./rules/china-domain-fallback.yaml
   FDUDomain:
     type: file
     behavior: classical
@@ -136,8 +141,11 @@ rules:
 - RULE-SET,FDUDomain,🎓 校内
 - DOMAIN-SUFFIX,*.lab.example.com,🐧 SSH 转发
 - DOMAIN,git.example.com,🚀 代理
+- DOMAIN-SUFFIX,cn,DIRECT
+- RULE-SET,ChinaDomainFallback,DIRECT
 - GEOSITE,cn,DIRECT
 - GEOIP,CN,DIRECT,no-resolve
+- GEOSITE,geolocation-!cn,🚀 代理
 - MATCH,🐟 漏网之鱼
 sniffer:
   enable: true
