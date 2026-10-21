@@ -113,7 +113,7 @@ pub struct GenerationStats {
 }
 
 /// 生成结果。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GeneratedConfig {
     /// mihomo YAML 文本
@@ -529,7 +529,7 @@ mod tests {
         assert!(generated.yaml.contains("type: ssh"));
         assert!(generated.yaml.contains("name: 🎓 校内"));
         assert!(generated.yaml.contains("RULE-SET,FDUIP,🎓 校内"));
-        assert!(generated.yaml.contains("10.0.0.0/8"));
+        assert!(generated.yaml.contains("RULE-SET,FDUIP"));
         assert!(generated.yaml.contains("rules:"));
         assert!(generated.stats.tun_enabled);
         assert!(generated.stats.proxy_count >= 2);

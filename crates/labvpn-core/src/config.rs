@@ -673,7 +673,7 @@ impl Default for UiConfig {
 // ---------------------------------------------------------------------------
 
 /// LabVPN 全部持久化配置。
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct AppConfig {
     /// 配置版本
@@ -690,6 +690,20 @@ pub struct AppConfig {
     pub engine: EngineConfig,
     /// 界面
     pub ui: UiConfig,
+}
+
+impl Default for AppConfig {
+    fn default() -> Self {
+        Self {
+            version: CONFIG_VERSION,
+            subscription: SubscriptionConfig::default(),
+            campus_vpn: CampusVpnConfig::default(),
+            ssh_proxy: SshProxyConfig::default(),
+            routing: RoutingConfig::default(),
+            engine: EngineConfig::default(),
+            ui: UiConfig::default(),
+        }
+    }
 }
 
 /// 校验级别。

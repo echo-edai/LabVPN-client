@@ -1,0 +1,20 @@
+[package]
+name = "labvpn-helper"
+description = "LabVPN 特权 helper：以 root/admin 托管 mihomo 核心（TUN 模式）"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "labvpn-helper"
+path = "src/main.rs"
+
+[dependencies]
+labvpn-core = { path = "../labvpn-core" }
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true

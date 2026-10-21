@@ -190,7 +190,7 @@ fn matches_pattern(pattern: &str, input: &Input) -> bool {
                             } else {
                                 u32::MAX << (32 - prefix)
                             };
-                            (u32::from(ip) & mask) == u32::from(net)
+                            (u32::from(*ip) & mask) == u32::from(net)
                         }
                         _ => false,
                     }
@@ -202,7 +202,7 @@ fn matches_pattern(pattern: &str, input: &Input) -> bool {
                             } else {
                                 u128::MAX << (128 - prefix)
                             };
-                            (u128::from(ip) & mask) == u128::from(net)
+                            (u128::from(*ip) & mask) == u128::from(net)
                         }
                         _ => false,
                     }

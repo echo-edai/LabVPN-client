@@ -140,14 +140,16 @@ pub fn dns_query(
     if let Err(err) = socket.set_read_timeout(Some(timeout)) {
         return ProbeAttempt::failed(format!("设置超时失败：{err}"));
     }
+    // 转为 std UdpSocket 使用稳定 API
+    let udp_socket = std::net::UdpSocket::from(socket);
 
     let query = build_dns_query("www.fudan.edu.cn", rand_id());
     let start = Instant::now();
-    if let Err(err) = socket.send(&query) {
+    if let Err(err) = udp_socket.send(&query) {
         return ProbeAttempt::failed(format!("发送失败：{err}"));
     }
     let mut buf = [0u8; 512];
-    match socket.recv(&mut buf) {
+    match udp_socket.recv(&mut buf) {
         Ok(size) => {
             let elapsed = start.elapsed().as_millis() as u64;
             match parse_dns_response(&buf[..size]) {

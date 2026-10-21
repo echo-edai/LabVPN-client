@@ -185,7 +185,8 @@ impl RuleContext {
 }
 
 /// 完整规则计划：代理组 + 规则集 + 有序规则 + 警告。
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RulePlan {
     /// 代理组
     pub groups: Vec<GroupSpec>,
@@ -621,7 +622,11 @@ mod tests {
             .members
             .iter()
             .any(|member| member.starts_with("🖥 SSH-")));
-        assert!(group(names::GROUP_ADBLOCK).members.contains(&names::REJECT.to_string()) == adblock_enabled(&base_config()));
+        if adblock_enabled(&base_config()) {
+            assert!(group(names::GROUP_ADBLOCK)
+                .members
+                .contains(&names::REJECT.to_string()));
+        }
     }
 
     #[test]

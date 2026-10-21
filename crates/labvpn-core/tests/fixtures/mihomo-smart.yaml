@@ -1,0 +1,156 @@
+mixed-port: 7897
+allow-lan: false
+mode: rule
+log-level: info
+ipv6: false
+unified-delay: true
+tcp-concurrent: true
+find-process-mode: strict
+external-controller: 127.0.0.1:9097
+secret: test-secret
+profile:
+  store-selected: true
+  store-fake-ip: true
+dns:
+  enable: true
+  ipv6: false
+  enhanced-mode: fake-ip
+  fake-ip-range: 198.18.0.1/16
+  fake-ip-filter:
+  - '*.lan'
+  - '*.local'
+  - '*.msftconnecttest.com'
+  - '*.msftncsi.com'
+  - +.localhost
+  default-nameserver:
+  - 223.5.5.5
+  - 119.29.29.29
+  nameserver:
+  - 223.5.5.5
+  - 119.29.29.29
+  proxy-server-nameserver:
+  - 223.5.5.5
+  nameserver-policy:
+    +.fdu.edu.cn:
+    - 202.120.224.26
+    +.fducslg.com:
+    - 202.120.224.26
+    +.fduhole.com:
+    - 202.120.224.26
+    +.fudan.edu.cn:
+    - 202.120.224.26
+    +.fudanpress.com:
+    - 202.120.224.26
+tun:
+  enable: true
+  stack: mixed
+  auto-route: true
+  auto-detect-interface: true
+  dns-hijack:
+  - any:53
+  - tcp://any:53
+  route-exclude-address:
+  - 202.120.224.58/32
+  mtu: 1500
+  strict-route: false
+proxies:
+- name: 🏫 FDU-RVPN
+  type: socks5
+  server: 127.0.0.1
+  port: 11080
+  udp: false
+- name: 🖥 SSH-203.0.113.9
+  type: ssh
+  server: 203.0.113.9
+  port: 22
+  username: lab
+  password: ssh-pass
+proxy-providers:
+  sub:
+    type: http
+    url: https://sub.example.com/api?token=SECRET
+    path: ./providers/sub.yaml
+    interval: 43200
+    health-check:
+      enable: true
+      url: http://www.gstatic.com/generate_204
+      interval: 600
+proxy-groups:
+- name: ♻️ 自动选择
+  type: url-test
+  use:
+  - sub
+  url: http://www.gstatic.com/generate_204
+  interval: 300
+  tolerance: 50
+- name: 🚀 代理
+  type: select
+  proxies:
+  - ♻️ 自动选择
+  - DIRECT
+  use:
+  - sub
+- name: 🎓 校内
+  type: select
+  proxies:
+  - 🏫 FDU-RVPN
+  - DIRECT
+- name: 🐧 SSH 转发
+  type: select
+  proxies:
+  - 🖥 SSH-203.0.113.9
+  - DIRECT
+  - 🚀 代理
+- name: 🐟 漏网之鱼
+  type: select
+  proxies:
+  - 🚀 代理
+  - DIRECT
+rule-providers:
+  FDUDomain:
+    type: file
+    behavior: classical
+    format: yaml
+    path: ./rules/fdu-domain.yaml
+  FDUIP:
+    type: file
+    behavior: classical
+    format: yaml
+    path: ./rules/fdu-ip.yaml
+  LAN:
+    type: file
+    behavior: classical
+    format: yaml
+    path: ./rules/lan.yaml
+rules:
+- DOMAIN,stuvpn.fudan.edu.cn,DIRECT
+- IP-CIDR,202.120.224.58/32,DIRECT,no-resolve
+- PROCESS-NAME,fdu-connect,DIRECT
+- PROCESS-NAME,fdu-connect.exe,DIRECT
+- PROCESS-NAME,mihomo,DIRECT
+- PROCESS-NAME,mihomo.exe,DIRECT
+- IP-CIDR,127.0.0.0/8,DIRECT,no-resolve
+- RULE-SET,LAN,DIRECT
+- IP-CIDR,192.168.1.0/24,DIRECT,no-resolve
+- RULE-SET,FDUIP,🎓 校内
+- RULE-SET,FDUDomain,🎓 校内
+- DOMAIN-SUFFIX,*.lab.example.com,🐧 SSH 转发
+- DOMAIN,git.example.com,🚀 代理
+- GEOSITE,cn,DIRECT
+- GEOIP,CN,DIRECT,no-resolve
+- MATCH,🐟 漏网之鱼
+sniffer:
+  enable: true
+  force-dns-mapping: true
+  parse-pure-ip: true
+  override-destination: true
+  sniff:
+    HTTP:
+      ports:
+      - '80'
+      - '8080'
+      - '8880'
+    TLS:
+      ports:
+      - '443'
+      - '8443'

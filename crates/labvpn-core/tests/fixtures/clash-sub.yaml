@@ -1,0 +1,35 @@
+# 测试用 Clash 订阅（无真实凭据）
+mixed-port: 7890
+proxies:
+  - name: 🇭🇰 香港 01
+    type: ss
+    server: hk1.example.com
+    port: 8388
+    cipher: aes-256-gcm
+    password: test-password-1
+  - name: 🇯🇵 日本 01
+    type: vmess
+    server: jp1.example.com
+    port: 443
+    uuid: 11111111-2222-3333-4444-555555555555
+    alterId: 0
+    cipher: auto
+    tls: true
+  - name: 🇺🇸 美国 01
+    type: trojan
+    server: us1.example.com
+    port: 443
+    password: test-password-2
+    sni: us1.example.com
+proxy-groups:
+  - name: 🚀 节点选择
+    type: select
+    proxies:
+      - 🇭🇰 香港 01
+      - 🇯🇵 日本 01
+      - 🇺🇸 美国 01
+rules:
+  - DOMAIN-SUFFIX,google.com,🚀 节点选择
+  - DOMAIN-SUFFIX,github.com,🚀 节点选择
+  - GEOIP,CN,DIRECT
+  - MATCH,🚀 节点选择

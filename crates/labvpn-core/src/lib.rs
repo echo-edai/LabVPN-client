@@ -7,6 +7,7 @@
 //! - [`config`]：应用配置模型、默认值、校验与迁移
 //! - [`rules`]：分流规则模型、代理组拓扑、规则预设、自定义规则校验、命中模拟
 //! - [`generator`]：`AppConfig + RuntimeContext -> mihomo YAML`（纯函数）
+//! - [`ipc`]：特权 helper 通信协议（App 与 helper 共用）
 //! - [`subscription`]：Clash 订阅内容解析、格式识别、流量信息
 //! - [`probe`]：校园网多信号探测（含按网卡绑定以绕过第三方 TUN）
 //! - [`util`]：通用工具（脱敏、哈希、IP/CIDR 解析等）
@@ -17,6 +18,7 @@
 pub mod config;
 pub mod error;
 pub mod generator;
+pub mod ipc;
 pub mod probe;
 pub mod rules;
 pub mod subscription;

@@ -1,0 +1,41 @@
+[package]
+name = "labvpn-desktop"
+description = "LabVPN 桌面应用（Tauri 应用层）"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+default-run = "labvpn"
+
+[lib]
+name = "labvpn_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "labvpn"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build.workspace = true
+
+[dependencies]
+tauri.workspace = true
+tauri-plugin-opener.workspace = true
+tauri-plugin-autostart.workspace = true
+tauri-plugin-single-instance.workspace = true
+labvpn-core = { path = "../../../crates/labvpn-core" }
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml_ng.workspace = true
+thiserror.workspace = true
+log.workspace = true
+env_logger.workspace = true
+chrono.workspace = true
+reqwest.workspace = true
+tokio.workspace = true
+futures-util.workspace = true
+base64.workspace = true
+sha2.workspace = true
+aes-gcm.workspace = true
+getrandom.workspace = true
+uuid.workspace = true

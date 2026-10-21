@@ -3,7 +3,7 @@ resolver = "2"
 members = [
     "crates/labvpn-core",
     "crates/labvpn-helper",
-    "apps/desktop/src-tauri",
+    # "apps/desktop/src-tauri",  # 应用层稍后接入
 ]
 
 [workspace.package]
