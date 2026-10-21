@@ -73,8 +73,12 @@ function exec(command, commandArgs, options = {}) {
   return execFileSync(command, commandArgs, { stdio: "inherit", ...options });
 }
 
-/** 在目录中递归查找第一个匹配后缀的文件（mihomo/wintun 的压缩包内部命名可能变化）。 */
-function findFile(root, suffix) {
+/**
+ * 在目录中递归查找匹配后缀的文件（mihomo/wintun 压缩包内部命名与层级可能变化）。
+ * preferSegment 用于优先匹配路径片段（例如 wintun 的 `amd64`）。
+ */
+function findFile(root, suffix, preferSegment) {
+  const matches = [];
   const stack = [root];
   while (stack.length > 0) {
     const dir = stack.pop();
@@ -83,11 +87,16 @@ function findFile(root, suffix) {
       if (entry.isDirectory()) {
         stack.push(full);
       } else if (entry.name.toLowerCase().endsWith(suffix)) {
-        return full;
+        matches.push(full);
       }
     }
   }
-  return null;
+  if (matches.length === 0) return null;
+  if (preferSegment) {
+    const preferred = matches.find((file) => file.toLowerCase().split(/[\\/]/).includes(preferSegment));
+    if (preferred) return preferred;
+  }
+  return matches.sort()[0];
 }
 
 async function fetchMihomo() {
