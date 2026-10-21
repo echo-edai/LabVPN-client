@@ -116,18 +116,35 @@ jobs:
           }
           node -e "const fs=require('fs');const p='apps/desktop/src-tauri/tauri.conf.json';const c=JSON.parse(fs.readFileSync(p,'utf8'));c.bundle.windows={...(c.bundle.windows||{}),certificateThumbprint:process.env.WINDOWS_CERT_THUMBPRINT,digestAlgorithm:'sha256',timestampUrl:'http://timestamp.digicert.com'};fs.writeFileSync(p,JSON.stringify(c,null,2));"
 
+      - name: Configure signing environment (only when secrets are provided)
+        shell: bash
+        env:
+          SEC_APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          SEC_APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          SEC_APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          SEC_APPLE_ID: ${{ secrets.APPLE_ID }}
+          SEC_APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          SEC_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          SEC_KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          export_env() {
+            local value="${!1}"
+            if [ -n "$value" ]; then
+              echo "$2=$value" >> "$GITHUB_ENV"
+            fi
+          }
+          export_env SEC_APPLE_SIGNING_IDENTITY APPLE_SIGNING_IDENTITY
+          export_env SEC_APPLE_CERTIFICATE APPLE_CERTIFICATE
+          export_env SEC_APPLE_CERTIFICATE_PASSWORD APPLE_CERTIFICATE_PASSWORD
+          export_env SEC_APPLE_ID APPLE_ID
+          export_env SEC_APPLE_PASSWORD APPLE_PASSWORD
+          export_env SEC_APPLE_TEAM_ID APPLE_TEAM_ID
+          export_env SEC_KEYCHAIN_PASSWORD KEYCHAIN_PASSWORD
+
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # macOS 签名/公证（在仓库 Secrets 中配置后自动启用）
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         with:
           projectPath: apps/desktop
           tagName: ${{ github.ref_name }}
