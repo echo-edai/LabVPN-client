@@ -12,8 +12,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::config::{AppConfig, RoutingPreset};
 use crate::util;
-use providers::{ProviderSpec, AD_BLOCK, CHINA_DOMAIN_FALLBACK, FDU_DOMAIN, FDU_IP, LAN};
 use providers::enhanced_providers;
+use providers::{ProviderSpec, AD_BLOCK, CHINA_DOMAIN_FALLBACK, FDU_DOMAIN, FDU_IP, LAN};
 
 /// 固定名称常量（mihomo 配置与前端同源）。
 pub mod names {
@@ -114,19 +114,35 @@ impl GroupSpec {
     }
 
     /// 带 provider 的 select 组。
-    pub fn select_with_providers(name: impl Into<String>, members: &[&str], providers: &[&str]) -> Self {
+    pub fn select_with_providers(
+        name: impl Into<String>,
+        members: &[&str],
+        providers: &[&str],
+    ) -> Self {
         let mut spec = Self::select(name, members);
-        spec.providers = providers.iter().map(|provider| (*provider).to_string()).collect();
+        spec.providers = providers
+            .iter()
+            .map(|provider| (*provider).to_string())
+            .collect();
         spec
     }
 
     /// url-test 组。
-    pub fn url_test(name: impl Into<String>, providers: &[&str], url: &str, interval: u32, tolerance: u32) -> Self {
+    pub fn url_test(
+        name: impl Into<String>,
+        providers: &[&str],
+        url: &str,
+        interval: u32,
+        tolerance: u32,
+    ) -> Self {
         Self {
             name: name.into(),
             kind: GroupKind::UrlTest,
             members: Vec::new(),
-            providers: providers.iter().map(|provider| (*provider).to_string()).collect(),
+            providers: providers
+                .iter()
+                .map(|provider| (*provider).to_string())
+                .collect(),
             url: Some(url.to_string()),
             interval,
             tolerance,
@@ -274,10 +290,22 @@ pub fn adblock_enabled(config: &AppConfig) -> bool {
 
 fn build_providers(config: &AppConfig) -> Vec<ProviderSpec> {
     let mut providers = vec![ProviderSpec::local(LAN, "classical", "./rules/lan.yaml")];
-    providers.push(ProviderSpec::local(FDU_IP, "classical", "./rules/fdu-ip.yaml"));
-    providers.push(ProviderSpec::local(FDU_DOMAIN, "classical", "./rules/fdu-domain.yaml"));
+    providers.push(ProviderSpec::local(
+        FDU_IP,
+        "classical",
+        "./rules/fdu-ip.yaml",
+    ));
+    providers.push(ProviderSpec::local(
+        FDU_DOMAIN,
+        "classical",
+        "./rules/fdu-domain.yaml",
+    ));
     if adblock_enabled(config) {
-        providers.push(ProviderSpec::local(AD_BLOCK, "classical", "./rules/adblock.yaml"));
+        providers.push(ProviderSpec::local(
+            AD_BLOCK,
+            "classical",
+            "./rules/adblock.yaml",
+        ));
     }
     if !config.routing.geo_rules && config.routing.preset != RoutingPreset::Minimal {
         providers.push(ProviderSpec::local(
@@ -601,7 +629,10 @@ mod tests {
         assert!(pos("RULE-SET,FDUDomain") < pos("GEOIP,CN"));
         // 国内直连先于兜底
         assert!(pos("GEOIP,CN") < pos("MATCH,"));
-        assert_eq!(rules.last().expect("last rule"), &format!("MATCH,{}", names::GROUP_FINAL));
+        assert_eq!(
+            rules.last().expect("last rule"),
+            &format!("MATCH,{}", names::GROUP_FINAL)
+        );
     }
 
     #[test]
@@ -613,7 +644,9 @@ mod tests {
                 .find(|group| group.name == name)
                 .unwrap_or_else(|| panic!("缺少组 {name}"))
         };
-        assert!(group(names::GROUP_PROXY).providers.contains(&"sub".to_string()));
+        assert!(group(names::GROUP_PROXY)
+            .providers
+            .contains(&"sub".to_string()));
         assert!(group(names::GROUP_AUTO).kind == GroupKind::UrlTest);
         assert!(group(names::GROUP_CAMPUS)
             .members
@@ -670,18 +703,22 @@ mod tests {
         config.routing.preset = RoutingPreset::Minimal;
         let plan = build(&config, &context());
         assert!(!plan.rules.iter().any(|rule| rule.starts_with("GEOIP,CN")));
-        assert!(!plan.rules.iter().any(|rule| rule.contains("ChinaDomainFallback")));
+        assert!(!plan
+            .rules
+            .iter()
+            .any(|rule| rule.contains("ChinaDomainFallback")));
     }
 
     #[test]
     fn custom_rules_are_inserted_and_validated() {
         let mut config = base_config();
-        config.routing.custom_rules = vec![
-            "DOMAIN,git.example.com,🚀 代理".into(),
-            "BAD,RULE".into(),
-        ];
+        config.routing.custom_rules =
+            vec!["DOMAIN,git.example.com,🚀 代理".into(), "BAD,RULE".into()];
         let plan = build(&config, &context());
-        assert!(plan.rules.iter().any(|rule| rule == "DOMAIN,git.example.com,🚀 代理"));
+        assert!(plan
+            .rules
+            .iter()
+            .any(|rule| rule == "DOMAIN,git.example.com,🚀 代理"));
         assert!(!plan.warnings.is_empty());
     }
 

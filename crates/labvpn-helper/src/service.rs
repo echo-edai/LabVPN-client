@@ -46,8 +46,7 @@ const PLIST_PATH: &str = "/Library/LaunchDaemons/app.labvpn.helper.plist";
 fn platform_install(options: &Options) -> Result<(), String> {
     let install_dir = Path::new(INSTALL_DIR);
     let (helper, core) = copy_binaries(install_dir, options)?;
-    std::fs::create_dir_all(&options.workdir)
-        .map_err(|err| format!("创建工作目录失败: {err}"))?;
+    std::fs::create_dir_all(&options.workdir).map_err(|err| format!("创建工作目录失败: {err}"))?;
     let plist = macos_plist(&helper, &core, options)?;
     std::fs::write(PLIST_PATH, plist).map_err(|err| format!("写入 LaunchDaemon 失败: {err}"))?;
     let label = format!("system/{SERVICE_LABEL}");
@@ -150,8 +149,7 @@ const UNIT_PATH: &str = "/etc/systemd/system/labvpn-helper.service";
 fn platform_install(options: &Options) -> Result<(), String> {
     let install_dir = Path::new(INSTALL_DIR);
     let (helper, core) = copy_binaries(install_dir, options)?;
-    std::fs::create_dir_all(&options.workdir)
-        .map_err(|err| format!("创建工作目录失败: {err}"))?;
+    std::fs::create_dir_all(&options.workdir).map_err(|err| format!("创建工作目录失败: {err}"))?;
     let unit = format!(
         r#"[Unit]
 Description=LabVPN privileged helper (TUN mode)
@@ -251,7 +249,11 @@ fn copy_executable(source: &Path, target: &Path) -> Result<(), String> {
 /// 默认核心路径：helper 同目录下的 `mihomo`。
 pub fn default_core_path() -> Result<PathBuf, String> {
     let current = std::env::current_exe().map_err(|err| format!("无法定位 helper: {err}"))?;
-    let name = if cfg!(windows) { "mihomo.exe" } else { "mihomo" };
+    let name = if cfg!(windows) {
+        "mihomo.exe"
+    } else {
+        "mihomo"
+    };
     current
         .parent()
         .map(|parent| parent.join(name))
@@ -259,6 +261,7 @@ pub fn default_core_path() -> Result<PathBuf, String> {
 }
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
+#[allow(dead_code)]
 fn run_command(program: &str, args: &[&str]) -> Result<(), String> {
     let output = std::process::Command::new(program)
         .args(args)

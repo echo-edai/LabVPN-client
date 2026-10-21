@@ -59,6 +59,7 @@ pub struct MatchOutcome {
 }
 
 /// 对给定目标执行离线规则模拟。
+#[allow(clippy::collapsible_match)] // 规则类型与“只提示一次”的守卫分开写更清晰
 pub fn match_target(input: &str, plan: &RulePlan, payloads: &[ProviderPayload]) -> MatchOutcome {
     let parsed = Input::parse(input);
     let mut notes = Vec::new();
@@ -87,7 +88,9 @@ pub fn match_target(input: &str, plan: &RulePlan, payloads: &[ProviderPayload]) 
                 };
                 let outbound = parts.get(2).copied().unwrap_or("DIRECT").to_string();
                 let Some(payload) = payloads.iter().find(|p| p.name == *provider_name) else {
-                    notes.push(format!("规则集 {provider_name} 为远程规则集，离线无法精确匹配"));
+                    notes.push(format!(
+                        "规则集 {provider_name} 为远程规则集，离线无法精确匹配"
+                    ));
                     continue;
                 };
                 if let Some(pattern) = payload
@@ -116,31 +119,29 @@ pub fn match_target(input: &str, plan: &RulePlan, payloads: &[ProviderPayload]) 
                 }
             }
             "IP-CIDR" | "IP-CIDR6" => {
-                if matches!(parsed, Input::Ip(_)) {
-                    if matches_pattern(rule, &parsed) {
-                        return MatchOutcome {
-                            input: parsed.as_display(),
-                            matched: true,
-                            rule: rule.clone(),
-                            outbound: parts.get(2).copied().unwrap_or("DIRECT").to_string(),
-                            notes,
-                        };
-                    }
-                } else if !rule.contains("no-resolve") {
+                let is_ip = matches!(parsed, Input::Ip(_));
+                if is_ip && matches_pattern(rule, &parsed) {
+                    return MatchOutcome {
+                        input: parsed.as_display(),
+                        matched: true,
+                        rule: rule.clone(),
+                        outbound: parts.get(2).copied().unwrap_or("DIRECT").to_string(),
+                        notes,
+                    };
+                }
+                if !is_ip && !rule.contains("no-resolve") {
                     notes.push(format!("规则 {rule} 需要解析域名后判定，离线模拟跳过"));
                 }
             }
-            "GEOIP" | "GEOIP6" | "GEOSITE" => {
+            "GEOIP" | "GEOIP6" | "GEOSITE" | "PROCESS-NAME" => {
                 if !seen_geo_note {
-                    notes.push(format!(
-                        "{kind} 规则依赖 mihomo 的 geo 数据，离线模拟无法精确判定；以实际连接为准"
-                    ));
-                    seen_geo_note = true;
-                }
-            }
-            "PROCESS-NAME" => {
-                if !seen_geo_note {
-                    notes.push("PROCESS-NAME 规则依赖实际进程信息，离线模拟跳过".to_string());
+                    if kind == "PROCESS-NAME" {
+                        notes.push("PROCESS-NAME 规则依赖实际进程信息，离线模拟跳过".to_string());
+                    } else {
+                        notes.push(format!(
+                            "{kind} 规则依赖 mihomo 的 geo 数据，离线模拟无法精确判定；以实际连接为准"
+                        ));
+                    }
                     seen_geo_note = true;
                 }
             }
@@ -217,8 +218,8 @@ fn matches_pattern(pattern: &str, input: &Input) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{AppConfig, defaults};
-    use crate::rules::{RuleContext, build};
+    use crate::config::{defaults, AppConfig};
+    use crate::rules::{build, RuleContext};
 
     fn plan_fixture() -> RulePlan {
         let mut config = AppConfig::default();
@@ -275,6 +276,9 @@ mod tests {
         let payloads = crate::rules::providers::builtin_payloads().expect("payloads");
         let outcome = match_target("example.org", &plan, &payloads);
         assert!(outcome.matched);
-        assert_eq!(outcome.rule, format!("MATCH,{}", crate::rules::names::GROUP_FINAL));
+        assert_eq!(
+            outcome.rule,
+            format!("MATCH,{}", crate::rules::names::GROUP_FINAL)
+        );
     }
 }

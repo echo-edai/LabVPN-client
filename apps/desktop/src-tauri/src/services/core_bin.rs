@@ -105,7 +105,14 @@ pub fn resolve_core(app: &AppHandle, paths: &AppPaths) -> ResolvedBinary {
     }
     candidates.push((paths.bin_dir.join(name), "appData"));
     candidates.push((dev_binaries_dir().join(name), "dev"));
-    candidates.push((dev_binaries_dir().join(format!("mihomo-{}-{}", std::env::consts::OS, std::env::consts::ARCH)), "dev"));
+    candidates.push((
+        dev_binaries_dir().join(format!(
+            "mihomo-{}-{}",
+            std::env::consts::OS,
+            std::env::consts::ARCH
+        )),
+        "dev",
+    ));
     first_usable(candidates)
 }
 
@@ -118,8 +125,16 @@ pub fn resolve_helper(app: &AppHandle, paths: &AppPaths) -> Option<PathBuf> {
     }
     candidates.push(paths.bin_dir.join(name));
     candidates.push(dev_binaries_dir().join(name));
-    candidates.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/release").join(name));
-    candidates.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/debug").join(name));
+    candidates.push(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/release")
+            .join(name),
+    );
+    candidates.push(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/debug")
+            .join(name),
+    );
     candidates
         .into_iter()
         .find(|candidate| is_usable(candidate))

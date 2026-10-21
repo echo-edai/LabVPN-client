@@ -123,19 +123,14 @@ impl Default for SubscriptionConfig {
 // ---------------------------------------------------------------------------
 
 /// 探测协议。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ProbeProtocol {
     /// TCP 连接
+    #[default]
     Tcp,
     /// UDP DNS 查询（要求目标为 DNS 服务器）
     UdpDns,
-}
-
-impl Default for ProbeProtocol {
-    fn default() -> Self {
-        Self::Tcp
-    }
 }
 
 /// 校园网探测目标。
@@ -292,35 +287,22 @@ impl Default for CampusVpnConfig {
 // ---------------------------------------------------------------------------
 
 /// SSH 认证方式。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum SshAuth {
     /// 密码认证
+    #[default]
     Password,
     /// 私钥认证
     PrivateKey,
 }
 
-impl Default for SshAuth {
-    fn default() -> Self {
-        Self::Password
-    }
-}
-
 /// SSH 绑定目标（域名或 CIDR，内容自动识别）。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct SshRoute {
     /// 域名（普通或 `*.` 前缀）或 IP/CIDR
     pub value: String,
-}
-
-impl Default for SshRoute {
-    fn default() -> Self {
-        Self {
-            value: String::new(),
-        }
-    }
 }
 
 /// 公网 SSH 转发代理配置（配置页 3）。
@@ -371,10 +353,11 @@ impl Default for SshProxyConfig {
 // ---------------------------------------------------------------------------
 
 /// 分流预设。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum RoutingPreset {
     /// 智能分流（默认）：校内 → 校内，国内直连，国外走订阅，支持 SSH
+    #[default]
     Smart,
     /// 极简：只保留三类出口（校内 / SSH / 订阅）
     Minimal,
@@ -384,12 +367,6 @@ pub enum RoutingPreset {
     Global,
     /// 全部直连（排障用）
     Direct,
-}
-
-impl Default for RoutingPreset {
-    fn default() -> Self {
-        Self::Smart
-    }
 }
 
 impl RoutingPreset {
@@ -497,7 +474,7 @@ impl Default for RoutingConfig {
 // ---------------------------------------------------------------------------
 
 /// TUN 协议栈。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum TunStack {
     /// 系统栈（性能好，Unix 推荐）
@@ -505,13 +482,8 @@ pub enum TunStack {
     /// gVisor（兼容性好，Windows 推荐）
     Gvisor,
     /// 混合（默认）
+    #[default]
     Mixed,
-}
-
-impl Default for TunStack {
-    fn default() -> Self {
-        Self::Mixed
-    }
 }
 
 impl TunStack {
@@ -601,10 +573,11 @@ impl Default for EngineConfig {
 // ---------------------------------------------------------------------------
 
 /// 主题。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Theme {
     /// 跟随系统
+    #[default]
     System,
     /// 浅色
     Light,
@@ -612,26 +585,15 @@ pub enum Theme {
     Dark,
 }
 
-impl Default for Theme {
-    fn default() -> Self {
-        Self::System
-    }
-}
-
 /// 语言。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Language {
     /// 简体中文
+    #[default]
     ZhCn,
     /// English
     EnUs,
-}
-
-impl Default for Language {
-    fn default() -> Self {
-        Self::ZhCn
-    }
 }
 
 /// 界面配置。
@@ -908,7 +870,10 @@ impl AppConfig {
             return;
         }
         if ssh.host.trim().is_empty() {
-            issues.push(ValidationIssue::error("sshProxy.host", "请填写 SSH 公网地址"));
+            issues.push(ValidationIssue::error(
+                "sshProxy.host",
+                "请填写 SSH 公网地址",
+            ));
         }
         if ssh.username.trim().is_empty() {
             issues.push(ValidationIssue::error(
@@ -962,9 +927,7 @@ impl AppConfig {
             if rule.trim().is_empty() {
                 continue;
             }
-            if let Err(err) =
-                crate::rules::custom::validate_syntax(rule)
-            {
+            if let Err(err) = crate::rules::custom::validate_syntax(rule) {
                 issues.push(ValidationIssue::warn(
                     "routing.customRules",
                     format!("第 {} 条自定义规则被忽略：{err}", index + 1),

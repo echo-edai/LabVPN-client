@@ -63,7 +63,10 @@ pub async fn request_with_timeout(
         .await
         .map_err(|_| CommandError::new("helper", "连接 helper 超时"))?
         .map_err(|err| {
-            CommandError::new("helper", format!("无法连接 helper（127.0.0.1:{port}）: {err}"))
+            CommandError::new(
+                "helper",
+                format!("无法连接 helper（127.0.0.1:{port}）: {err}"),
+            )
         })?;
     let (read_half, write_half) = stream.into_split();
     let envelope = Request {
@@ -141,7 +144,13 @@ pub fn is_installed() -> bool {
 }
 
 /// 安装 helper：把 helper + mihomo 复制到系统目录并注册服务（需要管理员授权）。
-pub fn install(helper: &Path, core: &Path, token_file: &Path, workdir: &Path, port: u16) -> CmdResult<OperationResult> {
+pub fn install(
+    helper: &Path,
+    core: &Path,
+    token_file: &Path,
+    workdir: &Path,
+    port: u16,
+) -> CmdResult<OperationResult> {
     let mut args: Vec<String> = vec![
         "install".to_string(),
         "--port".to_string(),
@@ -162,10 +171,7 @@ pub fn install(helper: &Path, core: &Path, token_file: &Path, workdir: &Path, po
 
 /// 卸载 helper。
 pub fn uninstall(helper: &Path) -> CmdResult<OperationResult> {
-    let args = vec![
-        helper.display().to_string(),
-        "uninstall".to_string(),
-    ];
+    let args = vec![helper.display().to_string(), "uninstall".to_string()];
     elevate(&args)?;
     Ok(OperationResult::ok("helper 卸载请求已提交"))
 }
@@ -217,7 +223,10 @@ pub fn elevate(args: &[String]) -> CmdResult<()> {
             if stderr.contains("User canceled") || stderr.contains("-128") {
                 return Err(CommandError::new("helper", "用户取消了管理员授权"));
             }
-            return Err(CommandError::new("helper", format!("提权执行失败: {stderr}")));
+            return Err(CommandError::new(
+                "helper",
+                format!("提权执行失败: {stderr}"),
+            ));
         }
         Ok(())
     }
@@ -233,7 +242,9 @@ pub fn elevate(args: &[String]) -> CmdResult<()> {
         } else {
             let mut command_args = args.to_vec();
             command_args.insert(0, "-n".to_string());
-            std::process::Command::new("sudo").args(&command_args).output()
+            std::process::Command::new("sudo")
+                .args(&command_args)
+                .output()
         }
         .map_err(|err| CommandError::new("helper", format!("提权执行失败: {err}")))?;
         if !output.status.success() {

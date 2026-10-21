@@ -11,10 +11,10 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use labvpn_core::config::CampusVpnConfig;
+use tauri::AppHandle;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::Mutex;
-use tauri::AppHandle;
 
 use crate::dto::{ExistingVpn, VpnStatus, VpnTestResult};
 use crate::error::{CmdResult, CommandError};
@@ -120,11 +120,9 @@ impl VpnManager {
         inner.config = Some(config.clone());
 
         // 已经在运行
-        if inner.child.is_some() || inner.existing {
-            if self.port_open(config.socks_port).await {
-                inner.state = if inner.existing { "reusing" } else { "running" }.to_string();
-                return Ok(self.snapshot(config, &inner));
-            }
+        if (inner.child.is_some() || inner.existing) && self.port_open(config.socks_port).await {
+            inner.state = if inner.existing { "reusing" } else { "running" }.to_string();
+            return Ok(self.snapshot(config, &inner));
         }
 
         // 复用模式：只探测端口
@@ -167,7 +165,8 @@ impl VpnManager {
                 "端口 {} 已有 fdu-connect 实例，直接复用",
                 config.socks_port
             ));
-            self.logs.info("vpn", "检测到已有 fdu-connect 实例，复用现有 SOCKS 出口");
+            self.logs
+                .info("vpn", "检测到已有 fdu-connect 实例，复用现有 SOCKS 出口");
             self.emit(config, &inner);
             return Ok(self.snapshot(config, &inner));
         }
@@ -283,19 +282,17 @@ impl VpnManager {
             }
             {
                 let buffer = inner.log_lines.lock().await;
-                if buffer.iter().any(|line| {
-                    READY_MARKERS
-                        .iter()
-                        .any(|marker| line.contains(marker))
-                }) {
+                if buffer
+                    .iter()
+                    .any(|line| READY_MARKERS.iter().any(|marker| line.contains(marker)))
+                {
                     ready = true;
                     break;
                 }
-                if let Some(line) = buffer.iter().find(|line| {
-                    ERROR_MARKERS
-                        .iter()
-                        .any(|marker| line.contains(marker))
-                }) {
+                if let Some(line) = buffer
+                    .iter()
+                    .find(|line| ERROR_MARKERS.iter().any(|marker| line.contains(marker)))
+                {
                     failure = Some(format!("登录失败：{line}"));
                     break;
                 }
@@ -310,8 +307,14 @@ impl VpnManager {
             inner.state = "error".to_string();
             inner.last_error = Some(detail.clone());
             self.emit(config, &inner);
-            return Err(CommandError::new("vpn", detail)
-                .with_detail(recent.into_iter().rev().take(8).collect::<Vec<_>>().join(" | ")));
+            return Err(CommandError::new("vpn", detail).with_detail(
+                recent
+                    .into_iter()
+                    .rev()
+                    .take(8)
+                    .collect::<Vec<_>>()
+                    .join(" | "),
+            ));
         }
 
         inner.state = "running".to_string();
@@ -361,8 +364,13 @@ impl VpnManager {
             .and_then(|key| secrets.get(key));
         let test_port = find_free_port(config.socks_port + 1).await?;
         let server_address = resolve_server_address(config).await;
-        let config_text =
-            build_config_toml(config, &password, totp.as_deref(), &server_address, test_port);
+        let config_text = build_config_toml(
+            config,
+            &password,
+            totp.as_deref(),
+            &server_address,
+            test_port,
+        );
         let test_config = paths.vpn_dir.join("config.test.toml");
         std::fs::write(&test_config, config_text)?;
         #[cfg(unix)]
@@ -408,28 +416,23 @@ impl VpnManager {
         let mut ok = false;
         let mut failure: Option<String> = None;
         while Instant::now() < deadline {
-            match child.try_wait() {
-                Ok(Some(status)) => {
-                    failure = Some(format!("fdu-connect 退出（{status}）"));
-                    break;
-                }
-                _ => {}
+            if let Ok(Some(status)) = child.try_wait() {
+                failure = Some(format!("fdu-connect 退出（{status}）"));
+                break;
             }
             {
                 let buffer = lines.lock().await;
-                if buffer.iter().any(|line| {
-                    READY_MARKERS
-                        .iter()
-                        .any(|marker| line.contains(marker))
-                }) {
+                if buffer
+                    .iter()
+                    .any(|line| READY_MARKERS.iter().any(|marker| line.contains(marker)))
+                {
                     ok = true;
                     break;
                 }
-                if let Some(line) = buffer.iter().find(|line| {
-                    ERROR_MARKERS
-                        .iter()
-                        .any(|marker| line.contains(marker))
-                }) {
+                if let Some(line) = buffer
+                    .iter()
+                    .find(|line| ERROR_MARKERS.iter().any(|marker| line.contains(marker)))
+                {
                     failure = Some(format!("登录失败：{line}"));
                     break;
                 }
@@ -541,9 +544,7 @@ pub fn resolve_binary(config: &CampusVpnConfig, paths: &AppPaths) -> Option<Path
 pub fn detect_existing(config: &CampusVpnConfig, paths: &AppPaths) -> ExistingVpn {
     let binary = resolve_binary(config, paths);
     let ports = [config.socks_port, 1080];
-    let socks_port = ports
-        .into_iter()
-        .find(|port| port_open_blocking(*port));
+    let socks_port = ports.into_iter().find(|port| port_open_blocking(*port));
     let service_label = {
         #[cfg(target_os = "macos")]
         {
@@ -594,7 +595,10 @@ fn home_dir() -> Option<PathBuf> {
 
 async fn find_free_port(start: u16) -> CmdResult<u16> {
     for port in start..start.saturating_add(50) {
-        if tokio::net::TcpListener::bind(("127.0.0.1", port)).await.is_ok() {
+        if tokio::net::TcpListener::bind(("127.0.0.1", port))
+            .await
+            .is_ok()
+        {
             return Ok(port);
         }
     }
@@ -736,9 +740,11 @@ mod tests {
 
     #[test]
     fn builds_config_toml_with_credentials() {
-        let mut config = CampusVpnConfig::default();
-        config.username = "21300000000".into();
-        config.custom_proxy_domains = vec!["science.org".into()];
+        let config = CampusVpnConfig {
+            username: "21300000000".into(),
+            custom_proxy_domains: vec!["science.org".into()],
+            ..Default::default()
+        };
         let toml = build_config_toml(&config, "p@ss\"word", None, "202.120.224.58", 11080);
         assert!(toml.contains("username = \"21300000000\""));
         assert!(toml.contains("password = \"p@ss\\\"word\""));

@@ -26,3 +26,7 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+
+# 视觉走查工具与本地 npm 缓存（不提交）
+/.visual-tools/
+**/.npm-cache/

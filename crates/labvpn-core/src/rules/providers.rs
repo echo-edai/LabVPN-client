@@ -137,7 +137,11 @@ pub struct ProviderSpec {
 
 impl ProviderSpec {
     /// 本地文件 provider。
-    pub fn local(name: impl Into<String>, behavior: impl Into<String>, path: impl Into<String>) -> Self {
+    pub fn local(
+        name: impl Into<String>,
+        behavior: impl Into<String>,
+        path: impl Into<String>,
+    ) -> Self {
         Self {
             name: name.into(),
             source: ProviderSource::File { path: path.into() },
@@ -229,7 +233,10 @@ pub fn enhanced_providers() -> Vec<ProviderSpec> {
 
 /// mihomo 工作目录内规则文件清单：`(文件名, 内容)`。
 pub fn builtin_rule_files() -> Vec<(&'static str, &'static str)> {
-    BUILTIN.iter().map(|provider| (provider.file, provider.content)).collect()
+    BUILTIN
+        .iter()
+        .map(|provider| (provider.file, provider.content))
+        .collect()
 }
 
 #[cfg(test)]

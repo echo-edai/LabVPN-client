@@ -85,6 +85,7 @@ pub fn run() {
             commands::vpn::stop_vpn,
             commands::vpn::vpn_status,
             commands::vpn::test_vpn_connection,
+            commands::vpn::test_ssh,
             commands::system::get_snapshot,
             commands::system::get_system_info,
             commands::system::install_helper,
@@ -109,7 +110,9 @@ pub fn run() {
                         let _ = services::orchestrator::disconnect(state.inner()).await;
                         // Windows 等「提权临时启动」模式：退出时关闭 helper
                         if !services::helper::is_installed() {
-                            if let Ok(token) = services::helper::ensure_token(&state.paths.token_file) {
+                            if let Ok(token) =
+                                services::helper::ensure_token(&state.paths.token_file)
+                            {
                                 let _ = services::helper::shutdown(
                                     services::helper::default_port(),
                                     &token,
@@ -194,9 +197,7 @@ fn spawn_startup_tasks(app: tauri::AppHandle) {
                 .subscription
                 .last_updated
                 .map(|time| {
-                    let hours = chrono::Utc::now()
-                        .signed_duration_since(time)
-                        .num_hours();
+                    let hours = chrono::Utc::now().signed_duration_since(time).num_hours();
                     hours >= i64::from(config.subscription.update_interval_hours)
                 })
                 .unwrap_or(true);

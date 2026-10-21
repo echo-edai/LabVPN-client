@@ -1,6 +1,6 @@
 //! 编排层：把配置、校园网检测、校内 VPN、代理核心、系统代理串成一次「连接」。
 
-use labvpn_core::config::{AppConfig, IssueLevel, secret_keys, SshAuth};
+use labvpn_core::config::{secret_keys, AppConfig, IssueLevel, SshAuth};
 use labvpn_core::generator::{self, ProfileSource, RuntimeContext, SshRuntime};
 use tauri::{AppHandle, Manager};
 
@@ -42,8 +42,9 @@ pub async fn connect(state: &AppState) -> CmdResult<ConnectResult> {
         .map(|issue| format!("{}：{}", issue.field, issue.message))
         .collect();
     if !errors.is_empty() {
-        return Err(CommandError::new("config", "配置不完整，无法连接")
-            .with_detail(errors.join("；")));
+        return Err(
+            CommandError::new("config", "配置不完整，无法连接").with_detail(errors.join("；"))
+        );
     }
 
     // 1) 校园网检测
@@ -62,7 +63,9 @@ pub async fn connect(state: &AppState) -> CmdResult<ConnectResult> {
     let vpn_status = if !config.campus_vpn.enabled {
         state.vpn.status(&config.campus_vpn).await
     } else if skip_vpn {
-        state.logs.info("orchestrator", "检测到校园网：跳过 VPN 连接");
+        state
+            .logs
+            .info("orchestrator", "检测到校园网：跳过 VPN 连接");
         state.vpn.stop(&config.campus_vpn).await
     } else {
         match state
@@ -164,7 +167,9 @@ pub async fn disconnect(state: &AppState) -> CmdResult<EngineStatus> {
         let _ = state.vpn.stop(&config.campus_vpn).await;
     }
     if let Err(err) = platform::set_system_proxy(config.engine.mixed_port, false) {
-        state.logs.warn("orchestrator", format!("恢复系统代理失败：{err}"));
+        state
+            .logs
+            .warn("orchestrator", format!("恢复系统代理失败：{err}"));
     }
     state.logs.info("orchestrator", "已断开连接");
     Ok(status)
@@ -199,7 +204,9 @@ pub async fn on_campus_changed(app: &AppHandle) {
     let skip_vpn = config.campus_vpn.skip_when_on_campus && on_campus;
     if skip_vpn {
         if config.campus_vpn.enabled && config.campus_vpn.managed {
-            state.logs.info("orchestrator", "进入校园网：停止校内 VPN，切为直连");
+            state
+                .logs
+                .info("orchestrator", "进入校园网：停止校内 VPN，切为直连");
             let _ = state.vpn.stop(&config.campus_vpn).await;
         }
         let _ = state.engine.apply_campus_target(true).await;
@@ -207,7 +214,9 @@ pub async fn on_campus_changed(app: &AppHandle) {
         if config.campus_vpn.enabled {
             let current = state.vpn.status(&config.campus_vpn).await;
             if !matches!(current.state.as_str(), "running" | "reusing") {
-                state.logs.info("orchestrator", "离开校园网：重新连接校内 VPN");
+                state
+                    .logs
+                    .info("orchestrator", "离开校园网：重新连接校内 VPN");
                 let _ = state
                     .vpn
                     .start(&config.campus_vpn, &state.secrets, &state.paths)
@@ -223,7 +232,9 @@ async fn helper_readiness(state: &AppState) -> (u16, String, bool) {
     let token = match helper::ensure_token(&state.paths.token_file) {
         Ok(token) => token,
         Err(err) => {
-            state.logs.warn("helper", format!("准备 helper 令牌失败：{err}"));
+            state
+                .logs
+                .warn("helper", format!("准备 helper 令牌失败：{err}"));
             return (port, String::new(), false);
         }
     };
@@ -246,36 +257,36 @@ async fn build_runtime(
     let mut assets: Vec<(String, String)> = Vec::new();
 
     // 订阅来源
-    let profile_source = if config.subscription.enabled && !config.subscription.url.trim().is_empty()
-    {
-        let remote_possible = config.subscription.use_remote_provider
-            && (config.subscription.url.starts_with("http://")
-                || config.subscription.url.starts_with("https://"));
-        if remote_possible {
-            ProfileSource::Remote
-        } else if state.paths.profile_file.exists() {
-            if let Ok(content) = std::fs::read_to_string(&state.paths.profile_file) {
-                assets.push(("providers/sub.yaml".to_string(), content));
-            }
-            ProfileSource::Local
-        } else {
-            // 首次使用本地缓存：同步拉取一次
-            match subscription::refresh(state).await {
-                Ok(_) => {
-                    if let Ok(content) = std::fs::read_to_string(&state.paths.profile_file) {
-                        assets.push(("providers/sub.yaml".to_string(), content));
+    let profile_source =
+        if config.subscription.enabled && !config.subscription.url.trim().is_empty() {
+            let remote_possible = config.subscription.use_remote_provider
+                && (config.subscription.url.starts_with("http://")
+                    || config.subscription.url.starts_with("https://"));
+            if remote_possible {
+                ProfileSource::Remote
+            } else if state.paths.profile_file.exists() {
+                if let Ok(content) = std::fs::read_to_string(&state.paths.profile_file) {
+                    assets.push(("providers/sub.yaml".to_string(), content));
+                }
+                ProfileSource::Local
+            } else {
+                // 首次使用本地缓存：同步拉取一次
+                match subscription::refresh(state).await {
+                    Ok(_) => {
+                        if let Ok(content) = std::fs::read_to_string(&state.paths.profile_file) {
+                            assets.push(("providers/sub.yaml".to_string(), content));
+                        }
+                        ProfileSource::Local
                     }
-                    ProfileSource::Local
-                }
-                Err(err) => {
-                    warnings.push(format!("订阅内容不可用：{err}"));
-                    ProfileSource::None
+                    Err(err) => {
+                        warnings.push(format!("订阅内容不可用：{err}"));
+                        ProfileSource::None
+                    }
                 }
             }
-        }
-    } else {
-        ProfileSource::None
-    };
+        } else {
+            ProfileSource::None
+        };
 
     // SSH 运行凭据
     let ssh_runtime = if config.ssh_proxy.enabled
@@ -412,7 +423,11 @@ pub async fn helper_available(state: &AppState) -> bool {
 /// 生成预览（不启动）。
 pub async fn preview(state: &AppState) -> CmdResult<crate::dto::PreviewResult> {
     let config = state.config_snapshot();
-    let campus = state.last_campus().await.map(|status| status.on_campus).unwrap_or(false);
+    let campus = state
+        .last_campus()
+        .await
+        .map(|status| status.on_campus)
+        .unwrap_or(false);
     let helper_ready = helper_available(state).await;
     let built = build_runtime(
         state,
@@ -422,12 +437,25 @@ pub async fn preview(state: &AppState) -> CmdResult<crate::dto::PreviewResult> {
     )
     .await?;
     let generated = generator::generate(&config, &built.context)?;
+    // 预览内容脱敏：控制端口 secret / SSH 密码与私钥口令
+    let mut yaml = generated.yaml.clone();
+    if !built.context.controller_secret.is_empty() {
+        yaml = yaml.replace(&built.context.controller_secret, "***REDACTED***");
+    }
+    if let Some(ssh) = &built.context.ssh_runtime {
+        if let Some(password) = &ssh.password {
+            yaml = yaml.replace(password, "***REDACTED***");
+        }
+        if let Some(passphrase) = &ssh.private_key_passphrase {
+            yaml = yaml.replace(passphrase, "***REDACTED***");
+        }
+    }
     let mut warnings = built.warnings;
     warnings.extend(generated.warnings.clone());
     warnings.sort();
     warnings.dedup();
     Ok(crate::dto::PreviewResult {
-        yaml: generated.yaml,
+        yaml,
         warnings,
         stats: generated.stats,
         rules: generated.plan.rules,
@@ -453,4 +481,3 @@ pub async fn rule_plan(state: &AppState) -> CmdResult<labvpn_core::rules::RulePl
     let generated = generator::generate(&config, &built.context)?;
     Ok(generated.plan)
 }
-

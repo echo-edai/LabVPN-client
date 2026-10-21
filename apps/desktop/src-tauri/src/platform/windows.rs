@@ -39,8 +39,7 @@ pub fn wifi_ssid() -> Option<String> {
     None
 }
 
-const INTERNET_SETTINGS: &str =
-    r"HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings";
+const INTERNET_SETTINGS: &str = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings";
 
 /// 设置/取消系统代理（WinINet 注册表 + 通知刷新）。
 pub fn set_system_proxy(port: u16, enable: bool) -> Result<(), String> {
@@ -105,16 +104,16 @@ Add-Type -Namespace LabVPN -Name WinInet -MemberDefinition '[DllImport("wininet.
 [void][LabVPN.WinInet]::InternetSetOption([IntPtr]::Zero, 39, [IntPtr]::Zero, 0)
 [void][LabVPN.WinInet]::InternetSetOption([IntPtr]::Zero, 37, [IntPtr]::Zero, 0)
 "#;
-    let _ = run_command("powershell", &["-NoProfile", "-NonInteractive", "-Command", script]);
+    let _ = run_command(
+        "powershell",
+        &["-NoProfile", "-NonInteractive", "-Command", script],
+    );
     Ok(())
 }
 
 /// 当前系统代理端口（仅识别 127.0.0.1）。
 pub fn system_proxy_port() -> Option<u16> {
-    let output = run_command(
-        "reg",
-        &["query", INTERNET_SETTINGS, "/v", "ProxyEnable"],
-    )?;
+    let output = run_command("reg", &["query", INTERNET_SETTINGS, "/v", "ProxyEnable"])?;
     if !output.to_ascii_lowercase().contains("0x1") {
         return None;
     }

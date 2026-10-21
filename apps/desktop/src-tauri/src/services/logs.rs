@@ -23,11 +23,7 @@ pub struct LogStore {
 impl LogStore {
     /// 创建（日志文件追加写入，失败时仅内存日志）。
     pub fn new(path: &Path) -> Self {
-        let file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path)
-            .ok();
+        let file = OpenOptions::new().create(true).append(true).open(path).ok();
         Self {
             entries: Mutex::new(VecDeque::with_capacity(MAX_ENTRIES)),
             file: Mutex::new(file),

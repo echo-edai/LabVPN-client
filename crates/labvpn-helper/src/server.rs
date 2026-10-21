@@ -59,7 +59,12 @@ fn handle(mut stream: TcpStream, token: &str, supervisor: &Supervisor) -> io::Re
     }
     let request: Request = match serde_json::from_str(line.trim_end()) {
         Ok(request) => request,
-        Err(err) => return respond(&mut stream, &Response::failure(format!("请求解析失败: {err}"))),
+        Err(err) => {
+            return respond(
+                &mut stream,
+                &Response::failure(format!("请求解析失败: {err}")),
+            )
+        }
     };
     if !is_compatible(request_protocol_hint(&request)) {
         logging::warn("客户端协议版本可能不兼容");
@@ -104,10 +109,7 @@ fn dispatch(command: Command, supervisor: &Supervisor) -> (Response, bool) {
                 false,
             ),
         },
-        Command::StopCore => (
-            Response::success().with_status(supervisor.stop()),
-            false,
-        ),
+        Command::StopCore => (Response::success().with_status(supervisor.stop()), false),
         Command::RestartCore {
             config_yaml,
             assets,

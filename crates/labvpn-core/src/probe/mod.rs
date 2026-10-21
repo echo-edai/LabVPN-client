@@ -72,7 +72,11 @@ impl InterfaceInfo {
                 } else {
                     u32::MAX << (32 - prefix as u32)
                 };
-                Some(format!("{}/{}", std::net::Ipv4Addr::from(raw & mask), prefix))
+                Some(format!(
+                    "{}/{}",
+                    std::net::Ipv4Addr::from(raw & mask),
+                    prefix
+                ))
             }
             IpAddr::V6(v6) => {
                 let raw = u128::from(v6);
@@ -81,7 +85,11 @@ impl InterfaceInfo {
                 } else {
                     u128::MAX << (128 - prefix as u32)
                 };
-                Some(format!("{}/{}", std::net::Ipv6Addr::from(raw & mask), prefix))
+                Some(format!(
+                    "{}/{}",
+                    std::net::Ipv6Addr::from(raw & mask),
+                    prefix
+                ))
             }
         }
     }
@@ -117,9 +125,34 @@ pub fn collect_interfaces() -> Vec<InterfaceInfo> {
 pub fn is_virtual_interface(name: &str, ip: IpAddr) -> bool {
     let lower = name.to_ascii_lowercase();
     const VIRTUAL_PREFIXES: &[&str] = &[
-        "utun", "tun", "tap", "ppp", "ipsec", "wg", "wintun", "tailscale", "zerotier", "lo",
-        "loopback", "bridge", "br-", "docker", "veth", "virbr", "vmnet", "awdl", "llw", "gif",
-        "stf", "anpi", "clash", "mihomo", "singbox", "sing-box", "shadowrocket", "vpn",
+        "utun",
+        "tun",
+        "tap",
+        "ppp",
+        "ipsec",
+        "wg",
+        "wintun",
+        "tailscale",
+        "zerotier",
+        "lo",
+        "loopback",
+        "bridge",
+        "br-",
+        "docker",
+        "veth",
+        "virbr",
+        "vmnet",
+        "awdl",
+        "llw",
+        "gif",
+        "stf",
+        "anpi",
+        "clash",
+        "mihomo",
+        "singbox",
+        "sing-box",
+        "shadowrocket",
+        "vpn",
     ];
     if name == "lo0" || name == "lo" {
         return true;
@@ -335,7 +368,9 @@ pub fn detect_with(
         });
         let attempt = runner.probe(target, iface_ref);
         let (kind, name) = match target.protocol {
-            crate::config::ProbeProtocol::Tcp => (SignalKind::TcpProbe, format!("TCP {}", target.name)),
+            crate::config::ProbeProtocol::Tcp => {
+                (SignalKind::TcpProbe, format!("TCP {}", target.name))
+            }
             crate::config::ProbeProtocol::UdpDns => {
                 (SignalKind::DnsProbe, format!("DNS {}", target.name))
             }
@@ -403,18 +438,15 @@ fn score(signals: &[SignalResult]) -> (bool, f32) {
         positive as f32 / total as f32
     };
     // 强信号：本地 IP 段命中 / 复旦 SSID / 高权重探针成功
-    let strong = signals.iter().any(|signal| {
-        signal.ok
-            && matches!(
-                signal.kind,
-                SignalKind::IpRange | SignalKind::Wifi
-            )
-    }) || signals
+    let strong = signals
         .iter()
-        .any(|signal| signal.ok && signal.weight >= 90);
+        .any(|signal| signal.ok && matches!(signal.kind, SignalKind::IpRange | SignalKind::Wifi))
+        || signals
+            .iter()
+            .any(|signal| signal.ok && signal.weight >= 90);
     let on_campus = strong || ratio >= 0.5;
     let confidence = if on_campus {
-        ratio.max(0.6).min(1.0)
+        ratio.clamp(0.6, 1.0)
     } else {
         ratio.min(0.5)
     };
@@ -452,7 +484,7 @@ pub fn ip_in_cidr(ip: IpAddr, cidr: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{default_probe_targets, default_campus_cidrs, ProbeProtocol};
+    use crate::config::{default_campus_cidrs, default_probe_targets, ProbeProtocol};
     use std::collections::HashMap;
 
     struct MockRunner {
@@ -460,7 +492,11 @@ mod tests {
     }
 
     impl ProbeRunner for MockRunner {
-        fn probe(&self, target: &ProbeTarget, _iface: Option<socket::IfaceRef<'_>>) -> ProbeAttempt {
+        fn probe(
+            &self,
+            target: &ProbeTarget,
+            _iface: Option<socket::IfaceRef<'_>>,
+        ) -> ProbeAttempt {
             let ok = self.answers.get(&target.host).copied().unwrap_or(false);
             ProbeAttempt {
                 ok,
@@ -472,7 +508,13 @@ mod tests {
     }
 
     fn campus_iface() -> InterfaceInfo {
-        InterfaceInfo::wifi("en0", Some(12), Some(IpAddr::V4("10.188.1.10".parse().unwrap())), Some(19), false)
+        InterfaceInfo::wifi(
+            "en0",
+            Some(12),
+            Some(IpAddr::V4("10.188.1.10".parse().unwrap())),
+            Some(19),
+            false,
+        )
     }
 
     impl InterfaceInfo {
@@ -497,7 +539,13 @@ mod tests {
     fn detects_campus_by_ip_range() {
         let ifaces = vec![
             campus_iface(),
-            InterfaceInfo::wifi("utun11", Some(20), Some("198.18.0.1".parse().unwrap()), Some(24), true),
+            InterfaceInfo::wifi(
+                "utun11",
+                Some(20),
+                Some("198.18.0.1".parse().unwrap()),
+                Some(24),
+                true,
+            ),
         ];
         let runner = MockRunner {
             answers: HashMap::new(),
@@ -580,8 +628,20 @@ mod tests {
     fn computes_local_subnets() {
         let ifaces = vec![
             campus_iface(),
-            InterfaceInfo::wifi("en0", None, Some("10.188.1.10".parse().unwrap()), Some(19), false),
-            InterfaceInfo::wifi("utun11", None, Some("198.18.0.1".parse().unwrap()), Some(24), true),
+            InterfaceInfo::wifi(
+                "en0",
+                None,
+                Some("10.188.1.10".parse().unwrap()),
+                Some(19),
+                false,
+            ),
+            InterfaceInfo::wifi(
+                "utun11",
+                None,
+                Some("198.18.0.1".parse().unwrap()),
+                Some(24),
+                true,
+            ),
         ];
         let subnets = local_subnets(&ifaces);
         assert_eq!(subnets, vec!["10.188.192.0/19"]);
@@ -610,9 +670,18 @@ mod tests {
 
     #[test]
     fn ip_in_cidr_works_for_both_families() {
-        assert!(ip_in_cidr("10.188.1.10".parse().unwrap(), "10.188.0.0/16"));
-        assert!(!ip_in_cidr("10.230.1.10".parse().unwrap(), "10.188.0.0/16"));
-        assert!(ip_in_cidr("2001:da8:8001:844::1".parse().unwrap(), "2001:da8:8001::/48"));
+        assert!(ip_in_cidr(
+            "10.188.1.10".parse().unwrap(),
+            "10.188.0.0/16"
+        ));
+        assert!(!ip_in_cidr(
+            "10.230.1.10".parse().unwrap(),
+            "10.188.0.0/16"
+        ));
+        assert!(ip_in_cidr(
+            "2001:da8:8001:844::1".parse().unwrap(),
+            "2001:da8:8001::/48"
+        ));
     }
 
     #[test]

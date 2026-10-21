@@ -63,8 +63,7 @@ impl Supervisor {
             }
         }
 
-        fs::create_dir_all(&self.workdir)
-            .map_err(|err| format!("创建工作目录失败: {err}"))?;
+        fs::create_dir_all(&self.workdir).map_err(|err| format!("创建工作目录失败: {err}"))?;
         let rules_dir = self.workdir.join("rules");
         fs::create_dir_all(&rules_dir).map_err(|err| format!("创建规则目录失败: {err}"))?;
         // 内置规则文件（与 App 版本强一致）
@@ -146,11 +145,6 @@ impl Supervisor {
                 ..CoreStatus::default()
             },
         }
-    }
-
-    /// 核心二进制路径。
-    pub fn core_path(&self) -> &Path {
-        &self.core_path
     }
 }
 

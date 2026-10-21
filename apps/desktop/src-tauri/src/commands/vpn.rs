@@ -2,8 +2,10 @@
 
 use tauri::State;
 
-use crate::dto::{ExistingVpn, VpnStatus, VpnTestResult};
-use crate::error::CmdResult;
+use std::time::{Duration, Instant};
+
+use crate::dto::{ExistingVpn, SshTestResult, VpnStatus, VpnTestResult};
+use crate::error::{CmdResult, CommandError};
 use crate::services::{orchestrator, vpn};
 use crate::state::AppState;
 
@@ -55,4 +57,40 @@ pub async fn test_vpn_connection(state: State<'_, AppState>) -> CmdResult<VpnTes
         .vpn
         .test(&config.campus_vpn, &state.secrets, &state.paths)
         .await
+}
+
+/// SSH 端口连通性测试（TCP 握手，不校验凭据）。
+#[tauri::command]
+pub async fn test_ssh(host: String, port: u16) -> CmdResult<SshTestResult> {
+    let host = host.trim().to_string();
+    if host.is_empty() {
+        return Err(CommandError::new("ssh", "请填写 SSH 主机地址"));
+    }
+    if port == 0 {
+        return Err(CommandError::new("ssh", "SSH 端口不能为 0"));
+    }
+    let start = Instant::now();
+    let timeout = Duration::from_secs(6);
+    match tokio::time::timeout(
+        timeout,
+        tokio::net::TcpStream::connect((host.as_str(), port)),
+    )
+    .await
+    {
+        Ok(Ok(_stream)) => Ok(SshTestResult {
+            ok: true,
+            message: format!("TCP 连接成功（{host}:{port}），凭据将在应用配置后由 mihomo 校验"),
+            elapsed_ms: start.elapsed().as_millis() as u64,
+        }),
+        Ok(Err(err)) => Ok(SshTestResult {
+            ok: false,
+            message: format!("连接失败：{err}"),
+            elapsed_ms: start.elapsed().as_millis() as u64,
+        }),
+        Err(_) => Ok(SshTestResult {
+            ok: false,
+            message: format!("连接超时（{}s）", timeout.as_secs()),
+            elapsed_ms: timeout.as_millis() as u64,
+        }),
+    }
 }

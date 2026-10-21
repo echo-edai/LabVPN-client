@@ -45,7 +45,10 @@ impl MihomoApi {
 
     /// 获取核心版本。
     pub async fn version(&self) -> CmdResult<String> {
-        let response = self.request(reqwest::Method::GET, "/version").send().await?;
+        let response = self
+            .request(reqwest::Method::GET, "/version")
+            .send()
+            .await?;
         if !response.status().is_success() {
             return Err(CommandError::new(
                 "mihomo",
@@ -110,11 +113,10 @@ impl MihomoApi {
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
         if !status.is_success() {
-            return Err(CommandError::new(
-                "mihomo",
-                format!("延迟测试失败：HTTP {status}"),
-            )
-            .with_detail(body));
+            return Err(
+                CommandError::new("mihomo", format!("延迟测试失败：HTTP {status}"))
+                    .with_detail(body),
+            );
         }
         let value: serde_json::Value = serde_json::from_str(&body)?;
         value
@@ -209,7 +211,10 @@ impl MihomoApi {
                     continue;
                 }
                 if let Ok(value) = serde_json::from_str::<serde_json::Value>(line) {
-                    let up = value.get("up").and_then(serde_json::Value::as_u64).unwrap_or(0);
+                    let up = value
+                        .get("up")
+                        .and_then(serde_json::Value::as_u64)
+                        .unwrap_or(0);
                     let down = value
                         .get("down")
                         .and_then(serde_json::Value::as_u64)
@@ -254,7 +259,10 @@ mod tests {
 
     #[test]
     fn encodes_uri_segment() {
-        assert_eq!(encode_segment("🚀 代理"), "%F0%9F%9A%80%20%E4%BB%A3%E7%90%86");
+        assert_eq!(
+            encode_segment("🚀 代理"),
+            "%F0%9F%9A%80%20%E4%BB%A3%E7%90%86"
+        );
         assert_eq!(encode_segment("simple-name_1.0~"), "simple-name_1.0~");
     }
 }

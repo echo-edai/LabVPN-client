@@ -12,7 +12,7 @@
 //! - [`probe`]：校园网多信号探测（含按网卡绑定以绕过第三方 TUN）
 //! - [`util`]：通用工具（脱敏、哈希、IP/CIDR 解析等）
 
-#![deny(clippy::unwrap_used)]
+#![cfg_attr(not(test), deny(clippy::unwrap_used))]
 #![warn(missing_docs)]
 
 pub mod config;

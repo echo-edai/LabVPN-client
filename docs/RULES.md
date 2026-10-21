@@ -104,12 +104,10 @@ dns:
   ipv6: false
   enhanced-mode: fake-ip
   fake-ip-range: 198.18.0.1/16
-  fake-ip-filter:            # 必须真实 IP 的域名
+  fake-ip-filter:            # 必须真实 IP 的域名（校内域名**不**在此列）
     - '*.lan'
     - '*.local'
-    - 'localhost.ptlogin2.qq.com'
-    - '+.fudan.edu.cn'       # 校内域名不做 fake-ip，便于内网直连/诊断
-    - '+.fducslg.com'
+    - '+.localhost'
   nameserver: [223.5.5.5, 119.29.29.29]
   proxy-server-nameserver: [223.5.5.5]   # 订阅/SSH 服务器域名直连解析
   nameserver-policy:
@@ -118,7 +116,8 @@ dns:
 ```
 
 - 校内域名规则命中在 DNS 之前（DOMAIN 规则），因此离校时域名会透传给 FDU SOCKS，由其校内 DNS 解析，无需本地可达。
-- `fake-ip-filter` 放校内域名：保证 `ping/nslookup` 等诊断得到真实内网地址，且避免部分校园服务对 fake-ip 的兼容问题。
+- 校内域名**保持 fake-ip**：在校内时连接回到 mihomo 后由 `nameserver-policy` 用校内 DNS 解析；离校时由 fdu-connect 解析，两条路径都可用。
+- `nameserver-policy` 仅在需要本地真实解析（如 DIRECT 直连校内）时生效。
 - 若用户手工切换"直连模式"，DNS 同步回退为系统解析。
 
 ## 8. TUN 配置（TUN 模式）

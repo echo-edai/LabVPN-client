@@ -105,7 +105,6 @@ impl SecretStore {
         self.set(key, &value)?;
         Ok(value)
     }
-
 }
 
 /// 生成密码学随机十六进制串。
@@ -200,8 +199,7 @@ fn read_file(path: &Path, key: &[u8; 32]) -> Result<BTreeMap<String, String>, St
     if raw.trim().is_empty() {
         return Ok(BTreeMap::new());
     }
-    let file: SecretFile =
-        serde_json::from_str(&raw).map_err(|err| format!("格式非法: {err}"))?;
+    let file: SecretFile = serde_json::from_str(&raw).map_err(|err| format!("格式非法: {err}"))?;
     if file.version != FILE_VERSION {
         return Err(format!("版本不支持: {}", file.version));
     }

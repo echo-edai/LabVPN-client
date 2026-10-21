@@ -41,12 +41,7 @@ pub struct IfaceRef<'a> {
 pub fn probe(target: &crate::config::ProbeTarget, iface: Option<IfaceRef<'_>>) -> ProbeAttempt {
     let timeout = Duration::from_millis(target.timeout_ms.max(100));
     match target.protocol {
-        ProbeProtocol::Tcp => tcp_connect(
-            &target.host,
-            target.port,
-            timeout,
-            iface,
-        ),
+        ProbeProtocol::Tcp => tcp_connect(&target.host, target.port, timeout, iface),
         ProbeProtocol::UdpDns => dns_query(&target.host, target.port, timeout, iface),
     }
 }
@@ -87,7 +82,11 @@ pub fn tcp_connect(
             elapsed_ms: elapsed,
             bound,
             detail: if bound {
-                format!("{}ms（已绑定 {}）", elapsed, iface.map(|i| i.name).unwrap_or("-"))
+                format!(
+                    "{}ms（已绑定 {}）",
+                    elapsed,
+                    iface.map(|i| i.name).unwrap_or("-")
+                )
             } else {
                 format!("{elapsed}ms")
             },

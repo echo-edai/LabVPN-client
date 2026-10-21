@@ -1,13 +1,13 @@
 //! 订阅拉取、解析、缓存与配置写回。
 
-use chrono::Utc;
-use labvpn_core::config::{TrafficInfo, SubscriptionConfig};
-use labvpn_core::subscription as core_sub;
 use crate::dto::SubscriptionInfo;
 use crate::error::{CmdResult, CommandError};
 use crate::paths::AppPaths;
 use crate::state::AppState;
 use crate::util::redact_url;
+use chrono::Utc;
+use labvpn_core::config::{SubscriptionConfig, TrafficInfo};
+use labvpn_core::subscription as core_sub;
 
 /// 拉取结果。
 pub struct FetchResult {
@@ -160,7 +160,10 @@ pub async fn import(
     info.warnings = summary.warnings;
     state.logs.info(
         "subscription",
-        format!("订阅已导入：{} 个节点，{} 个代理组", info.proxy_count, info.group_count),
+        format!(
+            "订阅已导入：{} 个节点，{} 个代理组",
+            info.proxy_count, info.group_count
+        ),
     );
     Ok(info)
 }

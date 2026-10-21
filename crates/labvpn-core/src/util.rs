@@ -115,8 +115,7 @@ pub fn parse_cidr_v6(input: &str) -> Option<(Ipv6Addr, u8)> {
 
 /// 判断字符串是否为合法 IP 或 CIDR（v4/v6 均可）。
 pub fn is_ip_or_cidr(input: &str) -> bool {
-    input.contains('/')
-        && (parse_cidr_v4(input).is_some() || parse_cidr_v6(input).is_some())
+    input.contains('/') && (parse_cidr_v4(input).is_some() || parse_cidr_v6(input).is_some())
         || parse_ip(input).is_some()
 }
 
@@ -144,18 +143,18 @@ pub fn is_domain(input: &str) -> bool {
 
 /// 从可执行文件路径中提取进程名（去目录、去 `.exe`）。
 pub fn process_name(binary: &str) -> String {
-    let file = binary
-        .rsplit(['/', '\\'])
-        .next()
-        .unwrap_or(binary)
-        .trim();
+    let file = binary.rsplit(['/', '\\']).next().unwrap_or(binary).trim();
     let file = file.strip_suffix(".exe").unwrap_or(file);
     file.to_string()
 }
 
 /// 规范化域名（小写、去尾部点）。
 pub fn normalize_domain(input: &str) -> String {
-    input.trim().to_ascii_lowercase().trim_end_matches('.').to_string()
+    input
+        .trim()
+        .to_ascii_lowercase()
+        .trim_end_matches('.')
+        .to_string()
 }
 
 /// 生成「规则目标」显示名：把内部组名转成人类可读描述。

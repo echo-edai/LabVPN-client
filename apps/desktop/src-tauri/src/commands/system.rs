@@ -107,8 +107,9 @@ async fn system_info(state: &AppState) -> SystemInfo {
 /// 安装特权 helper（弹出系统授权）。
 #[tauri::command]
 pub async fn install_helper(state: State<'_, AppState>) -> CmdResult<OperationResult> {
-    let helper_path = core_bin::resolve_helper(&state.app, &state.paths)
-        .ok_or_else(|| CommandError::new("helper", "找不到 labvpn-helper，请先运行 sidecars 脚本"))?;
+    let helper_path = core_bin::resolve_helper(&state.app, &state.paths).ok_or_else(|| {
+        CommandError::new("helper", "找不到 labvpn-helper，请先运行 sidecars 脚本")
+    })?;
     let core = core_bin::resolve_core(&state.app, &state.paths)
         .path
         .ok_or_else(|| CommandError::new("helper", "找不到 mihomo 核心"))?;
@@ -252,14 +253,13 @@ pub async fn export_diagnostics(state: State<'_, AppState>) -> CmdResult<Operati
         "campus": state.last_campus().await,
         "logs": state.logs.recent(300),
     });
-    let file_name = format!(
-        "diagnostics-{}.json",
-        Local::now().format("%Y%m%d-%H%M%S")
-    );
+    let file_name = format!("diagnostics-{}.json", Local::now().format("%Y%m%d-%H%M%S"));
     let path = state.paths.logs_dir.join(file_name);
     let text = serde_json::to_string_pretty(&payload)?;
     std::fs::write(&path, text)?;
-    state.logs.info("app", format!("诊断包已导出：{}", path.display()));
+    state
+        .logs
+        .info("app", format!("诊断包已导出：{}", path.display()));
     Ok(OperationResult {
         ok: true,
         message: "诊断包已导出".to_string(),
@@ -281,7 +281,9 @@ pub async fn sync_subscription(state: State<'_, AppState>) -> CmdResult<Operatio
 
 /// 立即刷新校园网检测并联动。
 #[tauri::command]
-pub async fn detect_campus_now(state: State<'_, AppState>) -> CmdResult<crate::dto::OperationResult> {
+pub async fn detect_campus_now(
+    state: State<'_, AppState>,
+) -> CmdResult<crate::dto::OperationResult> {
     let status = campus::detect(state.inner()).await;
     let changed = campus::update(state.inner(), status).await;
     if changed {

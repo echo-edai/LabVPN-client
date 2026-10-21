@@ -7,10 +7,10 @@ use std::time::{Duration, Instant};
 use labvpn_core::generator::GeneratedConfig;
 use labvpn_core::ipc::Command as HelperCommand;
 use labvpn_core::rules::names;
+use tauri::AppHandle;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::Mutex;
-use tauri::AppHandle;
 
 use crate::dto::{EngineStatus, ProxyGroupInfo};
 use crate::error::{CmdResult, CommandError};
@@ -222,7 +222,8 @@ impl EngineManager {
                 "core",
                 format!(
                     "已启动核心 pid={} 端口={}",
-                    pid.map(|value| value.to_string()).unwrap_or_else(|| "-".to_string()),
+                    pid.map(|value| value.to_string())
+                        .unwrap_or_else(|| "-".to_string()),
                     request.mixed_port
                 ),
             );
@@ -260,7 +261,10 @@ impl EngineManager {
         };
         self.logs.info(
             "core",
-            format!("核心就绪：{version}（控制端口 {}）", request.controller_port),
+            format!(
+                "核心就绪：{version}（控制端口 {}）",
+                request.controller_port
+            ),
         );
 
         let app = self.app.clone();
@@ -382,7 +386,8 @@ impl EngineManager {
         };
         if let Err(err) = self.select_proxy(names::GROUP_CAMPUS, target).await {
             log::warn!("切换校内组到 {target} 失败（回退 DIRECT）: {err}");
-            self.select_proxy(names::GROUP_CAMPUS, names::DIRECT).await?;
+            self.select_proxy(names::GROUP_CAMPUS, names::DIRECT)
+                .await?;
         }
         Ok(())
     }

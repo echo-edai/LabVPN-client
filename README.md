@@ -10,6 +10,17 @@ LabVPN 把「Clash 订阅 + 复旦 RVPN + 公网 SSH 中转」整合进一个桌
 **三页配置、一处融合、一套特调分流规则**。基于 Tauri 2 与 mihomo（Clash.Meta），
 支持 macOS / Windows / Ubuntu / AlmaLinux。
 
+## 界面预览
+
+![总览（深色）](docs/screenshots/dashboard-dark.jpg)
+
+| 三页配置 | 融合与规则 |
+|---|---|
+| ![订阅](docs/screenshots/setup-subscription.jpg) | ![融合](docs/screenshots/merge-rules.jpg) |
+| ![校内 VPN](docs/screenshots/setup-campus-vpn.jpg) | ![浅色主题](docs/screenshots/dashboard-light.jpg) |
+
+更多截图见 [`docs/screenshots/`](docs/screenshots/)。
+
 ## 功能
 
 - **自动分流（一套特调规则）**
@@ -93,15 +104,26 @@ cargo test -p labvpn-core
 └── .github/workflows/          # CI 与三平台发布
 ```
 
+## 开发状态
+
+| 模块 | 状态 |
+|---|---|
+| 核心库（配置/规则/生成器/订阅/探测） | ✅ 62 个单元测试通过，生成配置通过 `mihomo -t` 校验 |
+| Tauri 应用层（命令/服务/编排/托盘） | ✅ `cargo check` 零警告 |
+| 三页配置向导 + 融合页 UI | ✅ 深浅色、中英双语、9 张设计走查截图 |
+| TUN 特权 helper | ✅ 回环 IPC + 令牌 + launchd/systemd/提权安装与降级 |
+| 三平台 CI / 打包脚本 | ✅ 工作流就绪（签名与公证需配置证书密钥） |
+
 ## 路线图
 
 - [x] 需求与架构设计、开源选型（mihomo + fdu-connect + Tauri）
 - [x] 核心库：配置模型、规则引擎、mihomo 生成器、订阅解析、校园网探测
-- [ ] 三页配置向导与融合页 UI
-- [ ] TUN 特权 helper 与三平台安装/降级
-- [ ] 三平台 CI 打包与签名
-- [ ] 订阅多配置、规则命中实时诊断、托盘快捷操作
-- [ ] 分享链接/Base64 订阅转换
+- [x] 三页配置向导与融合页 UI（含分流诊断、自定义规则）
+- [x] TUN 特权 helper 与三平台安装/降级
+- [x] CI 与三平台打包工作流
+- [ ] 正式签名与公证发布（需要证书）
+- [ ] 分享链接 / Base64 订阅转换
+- [ ] 规则命中实时校验、托盘快捷操作增强
 
 ## 合规与免责
 

@@ -56,14 +56,18 @@ fn main() {
 fn serve(args: &[String]) -> Result<(), String> {
     let options = parse_options(args)?;
     let token = std::fs::read_to_string(&options.token_file)
-        .map_err(|err| format!("读取令牌文件失败（{}）：{err}", options.token_file.display()))?
+        .map_err(|err| {
+            format!(
+                "读取令牌文件失败（{}）：{err}",
+                options.token_file.display()
+            )
+        })?
         .trim()
         .to_string();
     if token.len() < 16 {
         return Err("令牌无效（长度不足）".to_string());
     }
-    std::fs::create_dir_all(&options.workdir)
-        .map_err(|err| format!("创建工作目录失败：{err}"))?;
+    std::fs::create_dir_all(&options.workdir).map_err(|err| format!("创建工作目录失败：{err}"))?;
     logging::init(options.workdir.join("helper.log"));
     let core_path = match &options.core {
         Some(path) => path.clone(),

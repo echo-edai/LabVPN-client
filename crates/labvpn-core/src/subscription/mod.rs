@@ -115,9 +115,15 @@ fn looks_like_clash_yaml(content: &str) -> bool {
     let Some(first) = first_meaningful else {
         return false;
     };
-    let key_hit = ["proxies", "proxy-groups", "proxy-providers", "rules", "mixed-port"]
-        .iter()
-        .any(|key| first.starts_with(&format!("{key}:")) || first.starts_with(&format!("\"{key}\":")));
+    let key_hit = [
+        "proxies",
+        "proxy-groups",
+        "proxy-providers",
+        "rules",
+        "mixed-port",
+    ]
+    .iter()
+    .any(|key| first.starts_with(&format!("{key}:")) || first.starts_with(&format!("\"{key}\":")));
     if key_hit {
         return true;
     }
@@ -135,7 +141,10 @@ fn looks_like_clash_yaml(content: &str) -> bool {
 pub fn parse_clash(content: &str) -> CoreResult<ClashProfile> {
     let value: serde_yaml_ng::Value = serde_yaml_ng::from_str(content)?;
     let mut profile = ClashProfile::default();
-    if let Some(proxies) = value.get("proxies").and_then(serde_yaml_ng::Value::as_sequence) {
+    if let Some(proxies) = value
+        .get("proxies")
+        .and_then(serde_yaml_ng::Value::as_sequence)
+    {
         profile.proxy_names = proxies
             .iter()
             .filter_map(|proxy| {
@@ -204,10 +213,7 @@ pub fn summarize(content: &str) -> CoreResult<SubscriptionSummary> {
             } else {
                 content.to_string()
             };
-            let count = links
-                .lines()
-                .filter(|line| line.contains("://"))
-                .count();
+            let count = links.lines().filter(|line| line.contains("://")).count();
             warnings.push(
                 "检测到分享链接订阅：当前版本仅支持 Clash/mihomo YAML，请使用机场的 Clash 订阅链接"
                     .to_string(),
@@ -321,8 +327,9 @@ mod tests {
 
     #[test]
     fn parses_userinfo_header() {
-        let traffic = parse_userinfo("upload=1024; download=2048; total=10737418240; expire=1800000000")
-            .expect("traffic");
+        let traffic =
+            parse_userinfo("upload=1024; download=2048; total=10737418240; expire=1800000000")
+                .expect("traffic");
         assert_eq!(traffic.upload, 1024);
         assert_eq!(traffic.download, 2048);
         assert_eq!(traffic.total, 10_737_418_240);

@@ -524,7 +524,9 @@ mod tests {
         let config = demo_config();
         let generated = generate(&config, &demo_context()).expect("generate");
         assert!(generated.yaml.contains("mixed-port: 7897"));
-        assert!(generated.yaml.contains("external-controller: 127.0.0.1:9097"));
+        assert!(generated
+            .yaml
+            .contains("external-controller: 127.0.0.1:9097"));
         assert!(generated.yaml.contains("name: 🏫 FDU-RVPN"));
         assert!(generated.yaml.contains("type: ssh"));
         assert!(generated.yaml.contains("name: 🎓 校内"));
@@ -534,7 +536,8 @@ mod tests {
         assert!(generated.stats.tun_enabled);
         assert!(generated.stats.proxy_count >= 2);
         // YAML 可被再次解析
-        let value: serde_yaml_ng::Value = serde_yaml_ng::from_str(&generated.yaml).expect("valid yaml");
+        let value: serde_yaml_ng::Value =
+            serde_yaml_ng::from_str(&generated.yaml).expect("valid yaml");
         assert!(value.get("proxy-groups").is_some());
         assert!(value.get("rule-providers").is_some());
     }
@@ -560,7 +563,8 @@ mod tests {
         ctx.on_campus = true;
         let generated = generate(&config, &ctx).expect("generate");
         assert!(generated.yaml.contains("name: 🎓 校内"));
-        let value: serde_yaml_ng::Value = serde_yaml_ng::from_str(&generated.yaml).expect("valid yaml");
+        let value: serde_yaml_ng::Value =
+            serde_yaml_ng::from_str(&generated.yaml).expect("valid yaml");
         let groups = value["proxy-groups"].as_sequence().expect("groups");
         let campus = groups
             .iter()

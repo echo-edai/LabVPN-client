@@ -124,4 +124,3 @@ pub fn ensure_controller_secret(secrets: &SecretStore, config: &AppConfig) -> Cm
 pub fn export_json(config: &AppConfig) -> CmdResult<String> {
     Ok(serde_json::to_string_pretty(config)?)
 }
-

@@ -9,7 +9,7 @@ use tauri::AppHandle;
 
 use crate::dto::{ConfigEnvelope, CoreInfo};
 use crate::error::{CmdResult, CommandError};
-use crate::paths::{AppPaths, };
+use crate::paths::AppPaths;
 use crate::services::config as config_service;
 use crate::services::core_bin;
 use crate::services::engine::EngineManager;
@@ -82,7 +82,10 @@ impl AppState {
             format!(
                 "LabVPN 启动：配置版本 {}，核心 {}（{}）",
                 config.version,
-                core_info.version.clone().unwrap_or_else(|| "未找到".to_string()),
+                core_info
+                    .version
+                    .clone()
+                    .unwrap_or_else(|| "未找到".to_string()),
                 core_info.source
             ),
         );

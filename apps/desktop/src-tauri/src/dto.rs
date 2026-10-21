@@ -260,7 +260,6 @@ impl OperationResult {
             detail: None,
         }
     }
-
 }
 
 /// 现存 fdu-connect 安装探测结果。
@@ -287,6 +286,18 @@ pub struct VpnTestResult {
     pub message: String,
     /// 日志细节
     pub log_lines: Vec<String>,
+}
+
+/// SSH 连通性测试结果。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SshTestResult {
+    /// 是否连通
+    pub ok: bool,
+    /// 说明
+    pub message: String,
+    /// 耗时（毫秒）
+    pub elapsed_ms: u64,
 }
 
 /// 环境信息（设置页/排障）。
