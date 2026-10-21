@@ -120,10 +120,14 @@ function installSidecar(baseName, sourcePath, { placeholder = false } = {}) {
   );
 }
 
-async function download(url, destination) {
+async function download(url, destination, { required = true } = {}) {
   log(`下载 ${url}`);
   const response = await fetch(url, { redirect: "follow" });
-  if (!response.ok) fail(`下载失败 HTTP ${response.status}: ${url}`);
+  if (!response.ok) {
+    const message = `下载失败 HTTP ${response.status}: ${url}`;
+    if (required) fail(message);
+    throw new Error(message);
+  }
   const buffer = Buffer.from(await response.arrayBuffer());
   writeFileSync(destination, buffer);
   log(
@@ -188,9 +192,10 @@ async function fetchMihomo() {
 
 /** 内置 geodata：mihomo 首启无需联网下载 GeoSite/MMDB（避免 20s+ 启动超时）。 */
 async function fetchGeoData() {
+  const GEO_BASE = "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest";
   const assets = [
-    { name: "GeoSite.dat", url: `${RELEASE_BASE}/GeoSite.dat` },
-    { name: "geoip.metadb", url: `${RELEASE_BASE}/geoip.metadb` },
+    { name: "GeoSite.dat", url: `${GEO_BASE}/GeoSite.dat` },
+    { name: "geoip.metadb", url: `${GEO_BASE}/geoip.metadb` },
   ];
   for (const asset of assets) {
     const target = join(BIN_DIR, asset.name);
@@ -199,7 +204,7 @@ async function fetchGeoData() {
       continue;
     }
     try {
-      await download(asset.url, target);
+      await download(asset.url, target, { required: false });
     } catch (error) {
       log(`⚠️ 下载 ${asset.name} 失败（离线？）：${error && error.message ? error.message : error}`);
       log("   mihomo 将退回首次启动时自动下载（可能较慢）");
