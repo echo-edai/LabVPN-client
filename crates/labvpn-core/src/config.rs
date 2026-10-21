@@ -495,6 +495,57 @@ impl Default for RoutingConfig {
 }
 
 // ---------------------------------------------------------------------------
+// 网络分析
+// ---------------------------------------------------------------------------
+
+/// 默认 AI 平台域名（用于出口 IP 长期跟踪）。
+pub fn default_ai_domains() -> Vec<String> {
+    [
+        "chatgpt.com",
+        "openai.com",
+        "oaistatic.com",
+        "oaiusercontent.com",
+        "claude.ai",
+        "anthropic.com",
+        "gemini.google.com",
+        "bard.google.com",
+        "perplexity.ai",
+        "copilot.microsoft.com",
+    ]
+    .iter()
+    .map(|domain| (*domain).to_string())
+    .collect()
+}
+
+/// 网络分析（流量历史 / 出口 IP / AI 平台）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct AnalyticsConfig {
+    /// 是否启用后台采样
+    pub enabled: bool,
+    /// 流量采样间隔（秒）
+    pub sample_interval_seconds: u64,
+    /// 出口 IP 采样间隔（秒）
+    pub egress_interval_seconds: u64,
+    /// 数据保留天数
+    pub retention_days: u32,
+    /// AI 平台域名（含用户自定义，可加前缀）
+    pub ai_domains: Vec<String>,
+}
+
+impl Default for AnalyticsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            sample_interval_seconds: 15,
+            egress_interval_seconds: 300,
+            retention_days: 90,
+            ai_domains: default_ai_domains(),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // 代理节点选择
 // ---------------------------------------------------------------------------
 
@@ -716,6 +767,8 @@ pub struct AppConfig {
     pub ssh_proxy: SshProxyConfig,
     /// 代理节点选择
     pub node_selection: NodeSelectionConfig,
+    /// 网络分析
+    pub analytics: AnalyticsConfig,
     /// 路由规则
     pub routing: RoutingConfig,
     /// 引擎
@@ -732,6 +785,7 @@ impl Default for AppConfig {
             campus_vpn: CampusVpnConfig::default(),
             ssh_proxy: SshProxyConfig::default(),
             node_selection: NodeSelectionConfig::default(),
+            analytics: AnalyticsConfig::default(),
             routing: RoutingConfig::default(),
             engine: EngineConfig::default(),
             ui: UiConfig::default(),

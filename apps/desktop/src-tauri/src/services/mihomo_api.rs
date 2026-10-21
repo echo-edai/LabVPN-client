@@ -5,7 +5,30 @@ use std::time::Duration;
 use futures_util::StreamExt;
 use tokio::sync::mpsc;
 
-use crate::dto::{ProxyGroupInfo, TrafficPoint};
+use crate::dto::ProxyGroupInfo;
+use crate::dto::TrafficPoint;
+
+/// mihomo 单条活动连接。
+#[derive(Debug, Clone, Default)]
+#[allow(dead_code)]
+pub struct ConnectionInfo {
+    /// 连接 id
+    pub id: String,
+    /// 目标域名（可能为空）
+    pub host: String,
+    /// 目标 IP
+    pub destination_ip: String,
+    /// 代理链（组名/节点名）
+    pub chains: Vec<String>,
+    /// 命中的规则
+    pub rule: String,
+    /// 规则内容
+    pub rule_payload: String,
+    /// 上行累计字节
+    pub upload: u64,
+    /// 下行累计字节
+    pub download: u64,
+}
 use crate::error::{CmdResult, CommandError};
 
 /// mihomo 控制 API。
@@ -41,6 +64,77 @@ impl MihomoApi {
             builder = builder.bearer_auth(&self.secret);
         }
         builder
+    }
+
+    /// 读取全部活动连接（用于分流流量统计与 AI 平台识别）。
+    pub async fn connections(&self) -> CmdResult<Vec<ConnectionInfo>> {
+        let response = self
+            .request(reqwest::Method::GET, "/connections")
+            .send()
+            .await?;
+        if !response.status().is_success() {
+            return Err(CommandError::new(
+                "mihomo",
+                format!("获取连接失败：HTTP {}", response.status()),
+            ));
+        }
+        let value: serde_json::Value = response.json().await?;
+        let mut result = Vec::new();
+        let Some(items) = value
+            .get("connections")
+            .and_then(serde_json::Value::as_array)
+        else {
+            return Ok(result);
+        };
+        for item in items {
+            let metadata = item.get("metadata");
+            let field = |name: &str| {
+                metadata
+                    .and_then(|meta| meta.get(name))
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("")
+                    .to_string()
+            };
+            result.push(ConnectionInfo {
+                id: item
+                    .get("id")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("")
+                    .to_string(),
+                host: field("host"),
+                destination_ip: field("destinationIP"),
+                chains: item
+                    .get("chains")
+                    .and_then(serde_json::Value::as_array)
+                    .map(|chains| {
+                        chains
+                            .iter()
+                            .filter_map(serde_json::Value::as_str)
+                            .map(str::to_string)
+                            .collect()
+                    })
+                    .unwrap_or_default(),
+                rule: item
+                    .get("rule")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("")
+                    .to_string(),
+                rule_payload: item
+                    .get("rulePayload")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("")
+                    .to_string(),
+                upload: item
+                    .get("upload")
+                    .and_then(serde_json::Value::as_u64)
+                    .unwrap_or(0),
+                download: item
+                    .get("download")
+                    .and_then(serde_json::Value::as_u64)
+                    .unwrap_or(0),
+            });
+        }
+        Ok(result)
     }
 
     /// 获取核心版本。

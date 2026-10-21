@@ -1,5 +1,6 @@
 import {
   GraduationCap,
+  BarChart3,
   LayoutDashboard,
   Route,
   ScrollText,
@@ -62,6 +63,7 @@ export function Sidebar() {
 
       <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto">
         <NavItem to={ROUTES.dashboard} label={t("nav.dashboard")} icon={LayoutDashboard} />
+        <NavItem to={ROUTES.analytics} label={t("nav.analytics")} icon={BarChart3} />
         <div className="mt-3 mb-1 px-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-muted">
           {t("configTabs.parallel")}
           {!ready ? (

@@ -97,6 +97,55 @@ export interface RoutingConfig {
   extraCampusDomains: string[];
 }
 
+export interface AnalyticsConfig {
+  enabled: boolean;
+  sampleIntervalSeconds: number;
+  egressIntervalSeconds: number;
+  retentionDays: number;
+  aiDomains: string[];
+}
+
+export interface CategoryBytes {
+  up: number;
+  down: number;
+}
+
+export interface CategoryTotals {
+  school: CategoryBytes;
+  overseas: CategoryBytes;
+  direct: CategoryBytes;
+  ssh: CategoryBytes;
+  other: CategoryBytes;
+  ai: CategoryBytes;
+}
+
+export interface TrafficBucketDto extends CategoryTotals {
+  ts: number;
+}
+
+export interface EgressSampleDto {
+  ts: number;
+  route: "direct" | "proxy" | string;
+  ip: string;
+  node: string | null;
+}
+
+export interface CampusPointDto {
+  ts: number;
+  onCampus: boolean;
+}
+
+export interface AnalyticsData {
+  range: string;
+  granularity: "hour" | "day" | string;
+  totals: CategoryTotals;
+  buckets: TrafficBucketDto[];
+  egress: EgressSampleDto[];
+  campus: CampusPointDto[];
+  aiDomains: string[];
+  updatedAt: string;
+}
+
 export type NodeSelectionMode = "auto" | "manual";
 
 export interface NodeSelectionConfig {
@@ -146,6 +195,7 @@ export interface AppConfig {
   campusVpn: CampusVpnConfig;
   sshProxy: SshProxyConfig;
   nodeSelection: NodeSelectionConfig;
+  analytics: AnalyticsConfig;
   routing: RoutingConfig;
   engine: EngineConfig;
   ui: UiConfig;

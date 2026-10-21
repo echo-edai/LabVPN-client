@@ -12,6 +12,7 @@ export const GROUP = {
 
 export const ROUTES = {
   dashboard: "/",
+  analytics: "/analytics",
   setupSubscription: "/setup/subscription",
   setupCampus: "/setup/campus",
   setupSsh: "/setup/ssh",
@@ -40,5 +41,5 @@ export const EVENTS = {
   navigateSettings: "navigate://settings",
 } as const;
 
-export const APP_VERSION = "0.1.4";
+export const APP_VERSION = "0.1.5";
 export const MAX_TRAFFIC_POINTS = 60;

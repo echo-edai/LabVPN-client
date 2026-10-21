@@ -8,6 +8,7 @@
  */
 import { GROUP, SECRET_KEYS } from "@/lib/constants";
 import type {
+  AnalyticsData,
   AppConfig,
   AppSnapshot,
   CampusStatus,
@@ -99,6 +100,13 @@ function defaultConfig(): AppConfig {
       testUrl: "http://www.gstatic.com/generate_204",
       intervalSeconds: 300,
       toleranceMs: 50,
+    },
+    analytics: {
+      enabled: true,
+      sampleIntervalSeconds: 15,
+      egressIntervalSeconds: 300,
+      retentionDays: 90,
+      aiDomains: ["chatgpt.com", "openai.com", "claude.ai", "anthropic.com", "gemini.google.com"],
     },
     routing: {
       preset: "smart",
@@ -422,6 +430,65 @@ const trafficEngine = (): ProxyGroupInfo[] =>
   proxyGroups().filter((group) => group.kind === "Selector");
 
 /** Mock 命令分发。 */
+function mockAnalytics(range: string): AnalyticsData {
+  const now = Math.floor(Date.now() / 1000);
+  const hourly = range === "24h";
+  const count = hourly ? 24 : range === "7d" ? 7 : 30;
+  const step = hourly ? 3600 : 86_400;
+  const start = now - (count - 1) * step;
+  const bucket = (ts: number, i: number) => {
+    const base = 1_800_000 + ((i * 917_311) % 3_400_000);
+    const school = { up: Math.round(base * 0.05), down: Math.round(base * 0.18) };
+    const overseas = { up: Math.round(base * 0.22), down: Math.round(base * 1.1) };
+    const direct = { up: Math.round(base * 0.12), down: Math.round(base * 0.66) };
+    const ssh = { up: Math.round(base * 0.01), down: Math.round(base * 0.05) };
+    const other = { up: 0, down: 0 };
+    const ai = { up: Math.round(overseas.up * 0.2), down: Math.round(overseas.down * 0.25) };
+    return { ts, school, overseas, direct, ssh, other, ai };
+  };
+  const buckets = Array.from({ length: count }, (_, i) => bucket(start + i * step, i));
+  const totals = buckets.reduce(
+    (acc, item) => {
+      for (const key of ["school", "overseas", "direct", "ssh", "other", "ai"] as const) {
+        acc[key].up += item[key].up;
+        acc[key].down += item[key].down;
+      }
+      return acc;
+    },
+    {
+      school: { up: 0, down: 0 },
+      overseas: { up: 0, down: 0 },
+      direct: { up: 0, down: 0 },
+      ssh: { up: 0, down: 0 },
+      other: { up: 0, down: 0 },
+      ai: { up: 0, down: 0 },
+    },
+  );
+  const egress = Array.from({ length: hourly ? 8 : 12 }, (_, i) => {
+    const ts = now - (hourly ? 3600 : 86_400) * (hourly ? 3 : 1) * (i + 1) / (hourly ? 1 : 1);
+    return {
+      ts: Math.floor(ts),
+      route: i % 2 === 0 ? "proxy" : "direct",
+      ip: i % 2 === 0 ? `203.0.113.${20 + (i % 5)}` : `10.188.1.${100 + (i % 10)}`,
+      node: i % 2 === 0 ? (i % 4 === 0 ? "🇭🇰 香港 01" : "🇯🇵 日本 02") : null,
+    };
+  }).reverse();
+  const campus = Array.from({ length: hourly ? 6 : 10 }, (_, i) => ({
+    ts: now - (i + 1) * (hourly ? 4 * 3600 : 86_400),
+    onCampus: i % 3 !== 0,
+  })).reverse();
+  return {
+    range,
+    granularity: hourly ? "hour" : "day",
+    totals,
+    buckets,
+    egress,
+    campus,
+    aiDomains: ["chatgpt.com", "openai.com", "claude.ai", "anthropic.com", "gemini.google.com"],
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 export async function mockInvoke(cmd: string, args?: Record<string, unknown>): Promise<unknown> {
   await delay(120 + Math.random() * 180);
   switch (cmd) {
@@ -518,6 +585,15 @@ export async function mockInvoke(cmd: string, args?: Record<string, unknown>): P
       return engine;
     case "get_proxy_groups":
       return engine.running ? trafficEngine() : [];
+    case "get_analytics": {
+      const range = String(args?.range ?? "24h");
+      return mockAnalytics(range);
+    }
+    case "set_ai_domains": {
+      const domains = (args?.domains as string[] | undefined) ?? [];
+      pushLog("info", "analytics", `AI 平台域名已更新：${domains.length} 个`);
+      return domains;
+    }
     case "get_node_candidates":
       return ["🇭🇰 香港 01", "🇯🇵 日本 02", "🇺🇸 美国 03", "🇸🇬 新加坡 04"];
     case "select_node": {

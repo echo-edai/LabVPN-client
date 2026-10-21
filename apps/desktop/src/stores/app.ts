@@ -7,6 +7,7 @@ import { api, IpcError, isTauri, onEvent } from "@/lib/ipc";
 import { mockTrafficPoint } from "@/lib/mock";
 import { translate, type MessageKey } from "@/locales";
 import type {
+  AnalyticsData,
   AppConfig,
   AppSnapshot,
   CampusStatus,
@@ -74,6 +75,8 @@ export interface AppStore {
   logs: LogEntry[];
   proxyGroups: ProxyGroupInfo[];
   nodeCandidates: string[];
+  analytics: AnalyticsData | null;
+  analyticsRange: "24h" | "7d" | "30d";
   traffic: TrafficPoint[];
   themeMode: ThemeMode;
   resolvedTheme: ResolvedTheme;
@@ -100,6 +103,8 @@ export interface AppStore {
   selectProxy: (group: string, name: string) => Promise<void>;
   loadNodeCandidates: () => Promise<void>;
   chooseNode: (name: string) => Promise<boolean>;
+  loadAnalytics: (range?: "24h" | "7d" | "30d") => Promise<void>;
+  updateAiDomains: (domains: string[]) => Promise<boolean>;
   testProxyDelay: () => Promise<void>;
   detectVpnBinary: () => Promise<ExistingVpn | null>;
   installHelper: () => Promise<void>;
@@ -150,6 +155,8 @@ export const useAppStore = create<AppStore>()((set, get) => ({
   logs: [],
   proxyGroups: [],
   nodeCandidates: [],
+  analytics: null,
+  analyticsRange: "24h",
   traffic: [],
   themeMode: "dark",
   resolvedTheme: "dark",
@@ -446,6 +453,29 @@ export const useAppStore = create<AppStore>()((set, get) => ({
       set({ busy: null });
       get().pushToast("error", get().t("toast.testFailed"), messageOf(error));
       return null;
+    }
+  },
+
+  loadAnalytics: async (range) => {
+    const nextRange = range ?? get().analyticsRange;
+    try {
+      const data = await api.getAnalytics(nextRange);
+      set({ analytics: data, analyticsRange: nextRange });
+    } catch (error) {
+      get().pushToast("error", get().t("toast.failed"), messageOf(error));
+    }
+  },
+
+  updateAiDomains: async (domains) => {
+    try {
+      const normalized = await api.setAiDomains(domains);
+      const analytics = get().analytics;
+      set({ analytics: analytics ? { ...analytics, aiDomains: normalized } : analytics });
+      get().pushToast("success", get().t("analytics.aiSaved"), `${normalized.length}`);
+      return true;
+    } catch (error) {
+      get().pushToast("error", get().t("toast.failed"), messageOf(error));
+      return false;
     }
   },
 

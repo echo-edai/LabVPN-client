@@ -392,12 +392,17 @@ pub fn detect_with(
         } else {
             "未找到物理网卡".to_string()
         };
+        let detail = if attempt.detail.contains("已绑定") {
+            attempt.detail.clone()
+        } else {
+            format!("{}；{}", attempt.detail, bind_note)
+        };
         signals.push(SignalResult {
             kind,
             name,
             ok: attempt.ok,
             weight: target.weight.min(100),
-            detail: format!("{}；{}", attempt.detail, bind_note),
+            detail,
         });
     }
 

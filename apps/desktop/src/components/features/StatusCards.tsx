@@ -57,48 +57,47 @@ export function CampusCard({ compact = false }: { compact?: boolean }) {
           </Button>
         }
       />
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <div
+      <div className="flex items-start gap-2.5">
+        <div
+          className={cn(
+            "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border",
+            onCampus
+              ? "border-[var(--ok)]/25 bg-[var(--ok)]/10 text-[var(--ok)]"
+              : "border-line bg-card text-ink-muted",
+          )}
+        >
+          {onCampus ? <Wifi size={17} /> : <WifiOff size={17} />}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-[15px] font-semibold leading-5 text-ink">
+            {onCampus ? t("status.onCampus") : t("status.offCampus")}
+          </div>
+          <div className="mt-0.5 break-words text-[11px] leading-4 text-ink-muted">
+            {campus ? `${t("campusCard.basis")}：${basis}` : t("status.campusUnknown")}
+          </div>
+        </div>
+      </div>
+      <div className="mt-2.5 flex items-center gap-1">
+        <span className="mr-0.5 text-[10px] text-ink-muted">手动</span>
+        {([
+          { value: null, label: "自动检测" },
+          { value: true, label: "强制校内" },
+          { value: false, label: "强制校外" },
+        ] as const).map((item) => (
+          <button
+            key={String(item.value)}
+            type="button"
+            onClick={() => void setCampusOverride(item.value)}
             className={cn(
-              "flex h-10 w-10 items-center justify-center rounded-xl border",
-              onCampus
-                ? "border-[var(--ok)]/25 bg-[var(--ok)]/10 text-[var(--ok)]"
-                : "border-line bg-card text-ink-muted",
+              "rounded-lg px-2 py-1 text-[10.5px] transition",
+              override === item.value
+                ? "bg-[var(--brand-soft)] text-brand"
+                : "text-ink-muted hover:bg-card hover:text-ink",
             )}
           >
-            {onCampus ? <Wifi size={18} /> : <WifiOff size={18} />}
-          </div>
-          <div>
-            <div className="text-[15px] font-semibold text-ink">
-              {onCampus ? t("status.onCampus") : t("status.offCampus")}
-            </div>
-            <div className="text-[11px] text-ink-muted">
-              {campus ? `${t("campusCard.basis")}：${basis}` : t("status.campusUnknown")}
-            </div>
-          </div>
-        </div>
-        <div className="flex gap-1">
-          {([
-            { value: null, label: t("setupCampus.overrideAuto") },
-            { value: true, label: t("setupCampus.overrideOn") },
-            { value: false, label: t("setupCampus.overrideOff") },
-          ] as const).map((item) => (
-            <button
-              key={String(item.value)}
-              type="button"
-              onClick={() => void setCampusOverride(item.value)}
-              className={cn(
-                "rounded-lg px-2 py-1 text-[10.5px] transition",
-                override === item.value
-                  ? "bg-[var(--brand-soft)] text-brand"
-                  : "text-ink-muted hover:bg-card hover:text-ink",
-              )}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
+            {item.label}
+          </button>
+        ))}
       </div>
 
       {campus ? (
@@ -109,20 +108,23 @@ export function CampusCard({ compact = false }: { compact?: boolean }) {
               {t("campusCard.editBasis")}
             </Link>
           </div>
-          <div className="mt-3 max-h-44 space-y-1.5 overflow-y-auto scroll-slim pr-1">
+          <div className="mt-2.5 max-h-48 space-y-1 overflow-y-auto scroll-slim pr-1">
             {[...campus.signals]
               .sort((a, b) => Number(b.ok) - Number(a.ok))
-              .filter((signal) => (compact ? signal.weight >= 70 : true))
-              .slice(0, compact ? 3 : 8)
+              .filter((signal) => (compact ? signal.ok : true))
+              .slice(0, compact ? 4 : 10)
               .map((signal, index) => (
-                <div key={`${signal.name}-${index}`} className="flex items-start gap-2 text-[11.5px]">
+                <div key={`${signal.name}-${index}`} className="flex items-start gap-2 rounded-lg px-1 py-1">
                   <StatusDot tone={signal.ok ? "ok" : "muted"} />
-                  <span className="w-[92px] shrink-0 truncate text-ink-soft">{signal.name}</span>
-                  <span className="min-w-0 flex-1 truncate text-ink-muted" title={signal.detail}>
-                    {signal.detail}
-                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[11px] leading-4 text-ink-soft">{signal.name}</div>
+                    <div className="break-words text-[10px] leading-4 text-ink-muted">{signal.detail}</div>
+                  </div>
                 </div>
               ))}
+            {compact && campus.signals.every((signal) => !signal.ok) ? (
+              <div className="text-[10.5px] text-ink-muted">未命中任何校内依据</div>
+            ) : null}
           </div>
         </>
       ) : (

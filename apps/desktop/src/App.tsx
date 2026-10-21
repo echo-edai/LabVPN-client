@@ -6,6 +6,7 @@ import { Logo } from "@/components/layout/Logo";
 import { Spinner } from "@/components/ui";
 import { EVENTS, ROUTES } from "@/lib/constants";
 import { onEvent } from "@/lib/ipc";
+import { Analytics } from "@/pages/Analytics";
 import { Dashboard } from "@/pages/Dashboard";
 import { Logs } from "@/pages/Logs";
 import { Merge } from "@/pages/Merge";
@@ -51,6 +52,7 @@ export function App() {
           path={ROUTES.dashboard}
           element={firstRun ? <Navigate to={ROUTES.setupSubscription} replace /> : <Dashboard />}
         />
+        <Route path={ROUTES.analytics} element={<Analytics />} />
         <Route path={ROUTES.setupSubscription} element={<SetupSubscription />} />
         <Route path={ROUTES.setupCampus} element={<SetupCampusVpn />} />
         <Route path={ROUTES.setupSsh} element={<SetupSsh />} />

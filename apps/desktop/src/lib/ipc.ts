@@ -7,6 +7,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 import { mockInvoke } from "@/lib/mock";
 import type {
+  AnalyticsData,
   AppConfig,
   AppSnapshot,
   CampusStatus,
@@ -93,6 +94,8 @@ export const api = {
   applyConfig: () => call<ConnectOutcome | null>("apply_config"),
   engineStatus: () => call<EngineStatus>("engine_status"),
   getProxyGroups: () => call<ProxyGroupInfo[]>("get_proxy_groups"),
+  getAnalytics: (range: string) => call<AnalyticsData>("get_analytics", { range }),
+  setAiDomains: (domains: string[]) => call<string[]>("set_ai_domains", { domains }),
   getNodeCandidates: () => call<string[]>("get_node_candidates"),
   selectNode: (name: string) => call<OperationResult>("select_node", { name }),
   selectProxy: (group: string, name: string) =>

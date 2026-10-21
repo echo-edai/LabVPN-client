@@ -45,6 +45,7 @@ pub fn run() {
             app.manage(state);
             setup_tray(app)?;
             services::campus::spawn_polling(handle.clone());
+            services::stats::spawn(handle.clone());
             spawn_startup_tasks(handle);
             Ok(())
         })
@@ -79,6 +80,8 @@ pub fn run() {
             commands::connect::get_node_candidates,
             commands::connect::select_node,
             commands::connect::test_proxy_delay,
+            commands::analytics::get_analytics,
+            commands::analytics::set_ai_domains,
             commands::connect::get_campus_status,
             commands::connect::set_campus_override,
             commands::connect::campus_override,

@@ -35,6 +35,8 @@ pub struct AppPaths {
     pub vpn_config_file: PathBuf,
     /// 日志目录
     pub logs_dir: PathBuf,
+    /// 网络分析数据目录
+    pub stats_dir: PathBuf,
     /// 应用日志文件
     pub app_log_file: PathBuf,
     /// 应用自带/下载的二进制目录
@@ -61,6 +63,7 @@ impl AppPaths {
             vpn_dir: data_dir.join("vpn"),
             vpn_config_file: data_dir.join("vpn").join("config.toml"),
             logs_dir: data_dir.join("logs"),
+            stats_dir: data_dir.join("stats"),
             app_log_file: data_dir.join("logs").join("app.log"),
             bin_dir: data_dir.join("bin"),
             data_dir,
@@ -73,6 +76,7 @@ impl AppPaths {
             &paths.profiles_dir,
             &paths.vpn_dir,
             &paths.logs_dir,
+            &paths.stats_dir,
             &paths.bin_dir,
         ] {
             std::fs::create_dir_all(dir)

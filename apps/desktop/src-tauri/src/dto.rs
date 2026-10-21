@@ -393,3 +393,101 @@ pub struct ImportSubscriptionRequest {
 fn default_true() -> bool {
     true
 }
+
+// ---------------------------------------------------------------------------
+// 网络分析
+// ---------------------------------------------------------------------------
+
+/// 分类流量字节。
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CategoryBytes {
+    /// 上行
+    pub up: u64,
+    /// 下行
+    pub down: u64,
+}
+
+/// 分类流量总计。
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CategoryTotals {
+    /// 校内流量
+    pub school: CategoryBytes,
+    /// 海外（订阅节点）流量
+    pub overseas: CategoryBytes,
+    /// 国内直连
+    pub direct: CategoryBytes,
+    /// SSH 转发
+    pub ssh: CategoryBytes,
+    /// 其他
+    pub other: CategoryBytes,
+    /// AI 平台流量
+    pub ai: CategoryBytes,
+}
+
+/// 一个时间桶的分类流量。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrafficBucketDto {
+    /// 桶起始时间（Unix 秒）
+    pub ts: i64,
+    /// 校内
+    pub school: CategoryBytes,
+    /// 海外
+    pub overseas: CategoryBytes,
+    /// 直连
+    pub direct: CategoryBytes,
+    /// SSH
+    pub ssh: CategoryBytes,
+    /// 其他
+    pub other: CategoryBytes,
+    /// AI 平台
+    pub ai: CategoryBytes,
+}
+
+/// 出口 IP 记录。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EgressSampleDto {
+    /// 时间
+    pub ts: i64,
+    /// 路由：direct / proxy
+    pub route: String,
+    /// 出口 IP
+    pub ip: String,
+    /// 代理节点（proxy 路由）
+    pub node: Option<String>,
+}
+
+/// 校园网状态点。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CampusPointDto {
+    /// 时间
+    pub ts: i64,
+    /// 是否在校内
+    pub on_campus: bool,
+}
+
+/// 网络分析数据。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AnalyticsData {
+    /// 时间范围：24h / 7d / 30d
+    pub range: String,
+    /// 桶粒度：hour / day
+    pub granularity: String,
+    /// 总计
+    pub totals: CategoryTotals,
+    /// 流量时间桶
+    pub buckets: Vec<TrafficBucketDto>,
+    /// 出口 IP 历史
+    pub egress: Vec<EgressSampleDto>,
+    /// 校园网状态时间线
+    pub campus: Vec<CampusPointDto>,
+    /// 配置的 AI 平台域名
+    pub ai_domains: Vec<String>,
+    /// 数据更新时间
+    pub updated_at: String,
+}
