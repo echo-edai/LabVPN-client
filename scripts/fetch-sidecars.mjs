@@ -14,7 +14,7 @@
  */
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -73,6 +73,23 @@ function exec(command, commandArgs, options = {}) {
   return execFileSync(command, commandArgs, { stdio: "inherit", ...options });
 }
 
+/** 在目录中递归查找第一个匹配后缀的文件（mihomo/wintun 的压缩包内部命名可能变化）。 */
+function findFile(root, suffix) {
+  const stack = [root];
+  while (stack.length > 0) {
+    const dir = stack.pop();
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(full);
+      } else if (entry.name.toLowerCase().endsWith(suffix)) {
+        return full;
+      }
+    }
+  }
+  return null;
+}
+
 async function fetchMihomo() {
   const target = join(BIN_DIR, process.platform === "win32" ? "mihomo.exe" : "mihomo");
   const resourceName = "mihomo";
@@ -101,7 +118,9 @@ async function fetchMihomo() {
     } else {
       exec("unzip", ["-o", archive, "-d", outDir]);
     }
-    copyFileSync(join(outDir, "mihomo.exe"), finalPath);
+    const extractedBinary = findFile(outDir, ".exe");
+    if (!extractedBinary) fail("mihomo 压缩包中没有找到 .exe 文件");
+    copyFileSync(extractedBinary, finalPath);
     rmSync(outDir, { recursive: true, force: true });
     rmSync(archive, { force: true });
   }
@@ -122,7 +141,9 @@ async function fetchWintun() {
   const outDir = join(tmpdir(), `wintun-${Date.now()}`);
   mkdirSync(outDir, { recursive: true });
   exec("powershell", ["-NoProfile", "-Command", `Expand-Archive -Force -Path '${archive}' -DestinationPath '${outDir}'`]);
-  copyFileSync(join(outDir, "wintun", "bin", "amd64", "wintun.dll"), target);
+  const extractedDll = findFile(outDir, "wintun.dll");
+  if (!extractedDll) fail("wintun 压缩包中没有找到 wintun.dll");
+  copyFileSync(extractedDll, target);
   rmSync(outDir, { recursive: true, force: true });
   rmSync(archive, { force: true });
   log(`✅ wintun.dll 就绪：${target}`);
