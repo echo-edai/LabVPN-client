@@ -1,0 +1,4 @@
+# 复旦内网 IP（rule-provider，classical/yaml）
+# 需求核心：10.0.0.0/8 全部走校内 VPN（校内时则由 🎓 校内 组切到 DIRECT）
+payload:
+  - IP-CIDR,10.0.0.0/8

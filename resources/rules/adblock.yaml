@@ -1,0 +1,40 @@
+# 广告 / 追踪域名（内置精简版，rule-provider classical/yaml）
+# 完整版可开启「增强规则集」（ACL4SSR BanAD，远程 provider）
+payload:
+  - DOMAIN-SUFFIX,doubleclick.net
+  - DOMAIN-SUFFIX,googlesyndication.com
+  - DOMAIN-SUFFIX,googleadservices.com
+  - DOMAIN-SUFFIX,adservice.google.com
+  - DOMAIN-SUFFIX,adnxs.com
+  - DOMAIN-SUFFIX,adsrvr.org
+  - DOMAIN-SUFFIX,amazon-adsystem.com
+  - DOMAIN-SUFFIX,taboola.com
+  - DOMAIN-SUFFIX,outbrain.com
+  - DOMAIN-SUFFIX,criteo.com
+  - DOMAIN-SUFFIX,criteo.net
+  - DOMAIN-SUFFIX,scorecardresearch.com
+  - DOMAIN-SUFFIX,umeng.com
+  - DOMAIN-SUFFIX,umengcloud.com
+  - DOMAIN-SUFFIX,cnzz.com
+  - DOMAIN-SUFFIX,pos.baidu.com
+  - DOMAIN-SUFFIX,cpro.baidu.com
+  - DOMAIN-SUFFIX,hm.baidu.com
+  - DOMAIN-SUFFIX,toutiao.com
+  - DOMAIN-SUFFIX,bytedance.com
+  - DOMAIN-SUFFIX,ads.tiktok.com
+  - DOMAIN-SUFFIX,analytics.tiktok.com
+  - DOMAIN-SUFFIX,miaozhen.com
+  - DOMAIN-SUFFIX,mediav.com
+  - DOMAIN-SUFFIX,allyes.com
+  - DOMAIN-SUFFIX,advertising.com
+  - DOMAIN-SUFFIX,adcolony.com
+  - DOMAIN-SUFFIX,applovin.com
+  - DOMAIN-SUFFIX,unityads.unity3d.com
+  - DOMAIN-SUFFIX,adjust.com
+  - DOMAIN-SUFFIX,appsflyer.com
+  - DOMAIN-SUFFIX,branch.io
+  - DOMAIN-SUFFIX,kochava.com
+  - DOMAIN-SUFFIX,tencent-cloud.net
+  - DOMAIN-KEYWORD,adservice
+  - DOMAIN-KEYWORD,adserver
+  - DOMAIN-KEYWORD,analytics

@@ -1,0 +1,14 @@
+# 复旦及附属组织域名（rule-provider，classical/yaml）
+# 来源：https://github.com/AkiraSalvare/fdu-netrules + 官方域名核对
+# 更新：scripts/sync-rules.mjs；修改后需同步 docs/RULES.md
+payload:
+  # 复旦主域（含所有子域：教务、邮箱、图书馆、ehall、elearning、uis、my 等）
+  - DOMAIN-SUFFIX,fudan.edu.cn
+  # 复旦别名域
+  - DOMAIN-SUFFIX,fdu.edu.cn
+  # FDUCSLG（复旦开源社区/镜像站）
+  - DOMAIN-SUFFIX,fducslg.com
+  # 旦夕树洞
+  - DOMAIN-SUFFIX,fduhole.com
+  # 复旦出版社
+  - DOMAIN-SUFFIX,fudanpress.com

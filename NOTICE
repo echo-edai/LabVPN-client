@@ -1,0 +1,34 @@
+# NOTICE — 第三方组件与数据来源
+
+LabVPN 本体以 **独立进程 + 配置文件** 的方式使用下列第三方项目，不修改其源码、
+不进行静态链接。各组件版权归原作者所有，分发其二进制时须遵守对应许可证。
+
+## 运行时 sidecar（不随本仓库/安装包分发，由脚本按需获取）
+
+| 组件 | 许可证 | 上游 | 用法 |
+|---|---|---|---|
+| mihomo (Clash.Meta) | GPL-3.0 | https://github.com/MetaCubeX/mihomo | 代理核心，通过 `scripts/fetch-sidecars.mjs` 下载官方 release |
+| fdu-connect | AGPL-3.0 | https://github.com/AkiraSalvare/fdu-connect | 复旦校内 RVPN 连接器；默认发现用户自行安装的版本，或由用户自行编译 |
+| zju-connect | GPL-3.0 | https://github.com/Mythologyli/zju-connect | fdu-connect 的上游项目 |
+| EasierConnect | GPL-3.0 | https://github.com/lyc8503/EasierConnect | EasyConnect 协议逆向实现（zju-connect 前身） |
+
+> GPL/AGPL 义务：若分发 mihomo/fdu-connect 二进制，需同时提供对应源码或书面 offer。
+> LabVPN 仓库不包含上述二进制；Release 构建脚本会在构建日志中记录版本与来源。
+
+## 规则数据
+
+| 数据 | 来源 | 说明 |
+|---|---|---|
+| 复旦域名 / 10.0.0.0/8 | https://github.com/AkiraSalvare/fdu-netrules（作者 AkiraSalvare） | `resources/rules/fdu-*.yaml`，通过 `scripts/sync-rules.mjs` 同步 |
+| 中国大陆域名兜底 | 参考 ACL4SSR (https://github.com/ACL4SSR/ACL4SSR) 与 MetaCubeX geo 数据整理 | 仅少量常见域名，完整规则建议开启 GEOSITE/GEOIP |
+| geo 数据（geosite.dat / geoip.dat） | https://github.com/MetaCubeX/meta-rules-dat | 由 mihomo 运行时下载，不随仓库分发 |
+
+## 前端 / 框架依赖
+
+Tauri（Apache-2.0 / MIT）、React（MIT）、Vite（MIT）、Tailwind CSS（MIT）、
+Zustand（MIT）、lucide-react（ISC）、React Router（MIT）等，详见各项目 LICENSE。
+
+## 商标声明
+
+"复旦大学"、"FDU"、"EasyConnect"、"Sangfor" 等名称归其各自权利人所有。
+LabVPN 为非官方开源项目，与复旦大学及深信服科技无隶属关系。
