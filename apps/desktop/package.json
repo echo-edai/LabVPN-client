@@ -6,6 +6,7 @@
   "description": "LabVPN 桌面客户端（Tauri 2 + React 19）",
   "scripts": {
     "dev:web": "vite",
+    "tauri": "tauri",
     "dev": "tauri dev",
     "build:web": "vite build",
     "build": "tauri build",
