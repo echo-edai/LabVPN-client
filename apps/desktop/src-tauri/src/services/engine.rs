@@ -571,7 +571,7 @@ fn process_is_core(pid: u32) -> bool {
 
 #[cfg(windows)]
 fn process_is_core(pid: u32) -> bool {
-    Command::new("tasklist")
+    std::process::Command::new("tasklist")
         .args(["/FI", &format!("PID eq {pid}"), "/NH"])
         .output()
         .map(|output| {
@@ -593,7 +593,7 @@ fn pid_alive(pid: u32) -> bool {
 
 #[cfg(windows)]
 fn pid_alive(pid: u32) -> bool {
-    Command::new("tasklist")
+    std::process::Command::new("tasklist")
         .args(["/FI", &format!("PID eq {pid}"), "/NH"])
         .output()
         .map(|output| String::from_utf8_lossy(&output.stdout).contains(&pid.to_string()))
