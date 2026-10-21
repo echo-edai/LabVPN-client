@@ -729,14 +729,8 @@ mod tests {
 
     #[test]
     fn ip_in_cidr_works_for_both_families() {
-        assert!(ip_in_cidr(
-            "10.188.1.10".parse().unwrap(),
-            "10.188.0.0/16"
-        ));
-        assert!(!ip_in_cidr(
-            "10.230.1.10".parse().unwrap(),
-            "10.188.0.0/16"
-        ));
+        assert!(ip_in_cidr("10.188.1.10".parse().unwrap(), "10.188.0.0/16"));
+        assert!(!ip_in_cidr("10.230.1.10".parse().unwrap(), "10.188.0.0/16"));
         assert!(ip_in_cidr(
             "2001:da8:8001:844::1".parse().unwrap(),
             "2001:da8:8001::/48"
