@@ -3,7 +3,7 @@
 > 复旦校园网 · 机场订阅 · 公网 SSH —— 一个客户端，自动分流。
 
 [![CI](https://github.com/echo-edai/LabVPN-client/actions/workflows/ci.yml/badge.svg)](https://github.com/echo-edai/LabVPN-client/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/badge/release-v0.1.0--pre-8b5cf6)](https://github.com/echo-edai/LabVPN-client/releases/tag/v0.1.0)
+[![Release](https://img.shields.io/badge/release-v0.1.1--pre-8b5cf6)](https://github.com/echo-edai/LabVPN-client/releases/tag/v0.1.1)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-1f6feb)](#平台支持)
 
@@ -13,16 +13,21 @@ LabVPN 把「Clash 订阅 + 复旦 RVPN + 公网 SSH 中转」整合进一个桌
 
 ## 下载
 
-首个预发布版本已构建四平台安装包（**未签名**，正式分发前请配置代码签名）：
+最新预发布版本 **v0.1.1** 已构建四平台安装包，**内置 fdu-connect**（开箱即用）。
+当前未配置 Apple/Windows 签名证书，安装时请按下方提示放行：
 
 | 平台 | 产物 |
 |---|---|
-| macOS ARM / Intel | `LabVPN_0.1.0_aarch64.dmg` / `LabVPN_0.1.0_x64.dmg` |
-| Windows 10/11 | `LabVPN_0.1.0_x64-setup.exe` / `.msi` |
+| macOS ARM / Intel | `LabVPN_0.1.1_aarch64.dmg` / `LabVPN_0.1.1_x64.dmg` |
+| Windows 10/11 | `LabVPN_0.1.1_x64-setup.exe` / `.msi` |
 | Ubuntu 22.04+ | `.deb` / `.AppImage` |
 | AlmaLinux 9+ | `.rpm` |
 
-👉 [Releases · v0.1.0 (pre-release)](https://github.com/echo-edai/LabVPN-client/releases/tag/v0.1.0)
+👉 [Releases · v0.1.1 (pre-release)](https://github.com/echo-edai/LabVPN-client/releases/tag/v0.1.1)
+
+- macOS 未签名：首次打开请右键 → 打开（或 系统设置 → 隐私与安全性 → 仍要打开）。
+- Windows 未签名：SmartScreen 提示时选择「仍要运行」。
+- 配置签名证书后（见 [BUILD.md §4.1](docs/BUILD.md#41-签名与公证)），Release 会自动签名并公证，实现下载即安装。
 
 ## 界面预览
 
