@@ -56,6 +56,7 @@ pub fn ping(host: &str, timeout: Duration, iface: Option<IfaceRef<'_>>) -> Probe
     if target.is_empty() {
         return ProbeAttempt::failed("Ping 目标为空");
     }
+    #[cfg(any(target_os = "macos", windows))]
     let timeout_ms = timeout.as_millis().max(100).to_string();
     #[cfg(all(unix, not(target_os = "macos")))]
     let timeout_secs = timeout.as_secs().max(1).to_string();
