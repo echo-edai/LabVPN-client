@@ -2,10 +2,12 @@
 
 use tauri::State;
 
+use labvpn_core::config::NodeSelectionMode;
 use labvpn_core::probe::CampusStatus;
+use labvpn_core::rules::names;
 
 use crate::dto::{ConnectOutcome, EngineStatus, OperationResult, ProxyGroupInfo};
-use crate::error::CmdResult;
+use crate::error::{CmdResult, CommandError};
 use crate::services::{campus, orchestrator};
 use crate::state::AppState;
 
@@ -129,4 +131,43 @@ pub async fn refresh_campus(state: State<'_, AppState>) -> CmdResult<CampusStatu
         orchestrator::on_campus_changed(&state.app).await;
     }
     Ok(status)
+}
+
+/// 订阅节点候选列表（读取本地缓存解析，用于手动固定节点）。
+#[tauri::command]
+pub fn get_node_candidates(state: State<'_, AppState>) -> CmdResult<Vec<String>> {
+    let path = &state.paths.profile_file;
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let Ok(content) = std::fs::read_to_string(path) else {
+        return Ok(Vec::new());
+    };
+    match labvpn_core::subscription::parse_clash(&content) {
+        Ok(profile) => Ok(profile.proxy_names),
+        Err(_) => Ok(Vec::new()),
+    }
+}
+
+/// 手动固定节点：持久化到配置并立即热切换（无需重启核心）。
+#[tauri::command]
+pub async fn select_node(state: State<'_, AppState>, name: String) -> CmdResult<OperationResult> {
+    let selected = name.trim().to_string();
+    if selected.is_empty() {
+        return Err(CommandError::new("engine", "节点名称不能为空"));
+    }
+    let mut config = state.config_snapshot();
+    config.node_selection.mode = NodeSelectionMode::Manual;
+    config.node_selection.selected = Some(selected.clone());
+    state.save_config(config)?;
+    if state.engine.is_running().await {
+        state
+            .engine
+            .select_proxy(names::GROUP_PROXY, &selected)
+            .await?;
+    }
+    state
+        .logs
+        .info("engine", format!("代理节点已固定为：{selected}"));
+    Ok(OperationResult::ok(format!("已固定节点 {selected}")))
 }

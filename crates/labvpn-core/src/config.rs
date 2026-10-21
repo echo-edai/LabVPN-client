@@ -34,6 +34,16 @@ pub mod defaults {
     pub const UPDATE_INTERVAL_HOURS: u32 = 12;
     /// 校园网探测默认超时（毫秒）
     pub const PROBE_TIMEOUT_MS: u64 = 1500;
+    /// 校园网关 Ping 探测目标（ping 通即 100% 校内）
+    pub const CAMPUS_PING_TARGET: &str = "10.134.140.1";
+    /// Ping 探测默认超时（毫秒）
+    pub const PING_TIMEOUT_MS: u64 = 2000;
+    /// 节点测速 URL（自动选最低延迟时使用）
+    pub const NODE_TEST_URL: &str = "http://www.gstatic.com/generate_204";
+    /// 节点自动测速间隔（秒）
+    pub const NODE_TEST_INTERVAL_SECS: u64 = 300;
+    /// 节点切换容差（毫秒）
+    pub const NODE_TOLERANCE_MS: u64 = 50;
 }
 
 /// 密钥库中使用的键名常量。配置里只保存这些键。
@@ -131,6 +141,8 @@ pub enum ProbeProtocol {
     Tcp,
     /// UDP DNS 查询（要求目标为 DNS 服务器）
     UdpDns,
+    /// ICMP Ping（端口无意义，置 0；绑定物理网卡执行）
+    Icmp,
 }
 
 /// 校园网探测目标。
@@ -167,6 +179,14 @@ impl Default for ProbeTarget {
 /// 默认探测列表（2026-10 实测可用）。
 pub fn default_probe_targets() -> Vec<ProbeTarget> {
     vec![
+        ProbeTarget {
+            name: "校内网关(Ping)".into(),
+            host: defaults::CAMPUS_PING_TARGET.into(),
+            port: 0,
+            protocol: ProbeProtocol::Icmp,
+            weight: 100,
+            timeout_ms: defaults::PING_TIMEOUT_MS,
+        },
         ProbeTarget {
             name: "校内镜像站".into(),
             host: "10.176.52.2".into(),
@@ -470,6 +490,49 @@ impl Default for RoutingConfig {
 }
 
 // ---------------------------------------------------------------------------
+// 代理节点选择
+// ---------------------------------------------------------------------------
+
+/// 节点选择模式。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum NodeSelectionMode {
+    /// 自动：按自定义测速 URL 与间隔选择延迟最低的节点
+    #[default]
+    Auto,
+    /// 手动：固定使用指定节点（热切换，无需重启核心）
+    Manual,
+}
+
+/// 国外订阅节点的选择策略。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct NodeSelectionConfig {
+    /// 选择模式
+    pub mode: NodeSelectionMode,
+    /// 手动模式下固定的节点名称
+    pub selected: Option<String>,
+    /// 自动测速使用的 URL（经过代理）
+    pub test_url: String,
+    /// 自动测速间隔（秒）
+    pub interval_seconds: u64,
+    /// 切换容差（毫秒，延迟差小于该值不切换）
+    pub tolerance_ms: u64,
+}
+
+impl Default for NodeSelectionConfig {
+    fn default() -> Self {
+        Self {
+            mode: NodeSelectionMode::Auto,
+            selected: None,
+            test_url: defaults::NODE_TEST_URL.to_string(),
+            interval_seconds: defaults::NODE_TEST_INTERVAL_SECS,
+            tolerance_ms: defaults::NODE_TOLERANCE_MS,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // 引擎
 // ---------------------------------------------------------------------------
 
@@ -646,6 +709,8 @@ pub struct AppConfig {
     pub campus_vpn: CampusVpnConfig,
     /// SSH 代理
     pub ssh_proxy: SshProxyConfig,
+    /// 代理节点选择
+    pub node_selection: NodeSelectionConfig,
     /// 路由规则
     pub routing: RoutingConfig,
     /// 引擎
@@ -661,6 +726,7 @@ impl Default for AppConfig {
             subscription: SubscriptionConfig::default(),
             campus_vpn: CampusVpnConfig::default(),
             ssh_proxy: SshProxyConfig::default(),
+            node_selection: NodeSelectionConfig::default(),
             routing: RoutingConfig::default(),
             engine: EngineConfig::default(),
             ui: UiConfig::default(),
@@ -716,6 +782,7 @@ impl AppConfig {
         self.validate_subscription(&mut issues);
         self.validate_campus(&mut issues);
         self.validate_ssh(&mut issues);
+        self.validate_node_selection(&mut issues);
         self.validate_routing(&mut issues);
         self.validate_engine(&mut issues);
         issues.sort_by(|a, b| a.field.cmp(&b.field));
@@ -827,7 +894,8 @@ impl AppConfig {
             }
         }
         for target in &vpn.probe_targets {
-            if target.host.trim().is_empty() || target.port == 0 {
+            let port_required = !matches!(target.protocol, ProbeProtocol::Icmp);
+            if target.host.trim().is_empty() || (port_required && target.port == 0) {
                 issues.push(ValidationIssue::warn(
                     "campusVpn.probeTargets",
                     format!("探测目标「{}」配置不完整，已忽略", target.name),
@@ -860,6 +928,41 @@ impl AppConfig {
             issues.push(ValidationIssue::warn(
                 "campusVpn.autoDetectCampus",
                 "已关闭校园网自动检测：在校内时也会尝试连接 VPN",
+            ));
+        }
+    }
+
+    fn validate_node_selection(&self, issues: &mut Vec<ValidationIssue>) {
+        let node = &self.node_selection;
+        let test_url = node.test_url.trim();
+        if node.mode == NodeSelectionMode::Auto {
+            if test_url.is_empty() {
+                issues.push(ValidationIssue::error(
+                    "nodeSelection.testUrl",
+                    "自动选择节点需要填写测速 URL",
+                ));
+            } else if !test_url.starts_with("http://") && !test_url.starts_with("https://") {
+                issues.push(ValidationIssue::error(
+                    "nodeSelection.testUrl",
+                    "测速 URL 必须以 http:// 或 https:// 开头",
+                ));
+            }
+            if !(30..=3600).contains(&node.interval_seconds) {
+                issues.push(ValidationIssue::error(
+                    "nodeSelection.intervalSeconds",
+                    "自动测速间隔应在 30–3600 秒之间",
+                ));
+            }
+        } else if node
+            .selected
+            .as_deref()
+            .map(str::trim)
+            .unwrap_or("")
+            .is_empty()
+        {
+            issues.push(ValidationIssue::warn(
+                "nodeSelection.selected",
+                "手动模式未指定节点，将使用第一个可用节点",
             ));
         }
     }

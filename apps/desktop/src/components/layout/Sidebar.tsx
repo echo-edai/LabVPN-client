@@ -12,14 +12,14 @@ import { NavLink, useLocation } from "react-router-dom";
 
 import { Logo } from "@/components/layout/Logo";
 import { StatusDot } from "@/components/ui";
-import { ROUTES } from "@/lib/constants";
+import { APP_VERSION, ROUTES } from "@/lib/constants";
 import { cn } from "@/lib/cn";
 import { useAppStore } from "@/stores/app";
 
 const wizardItems = [
-  { to: ROUTES.setupSubscription, labelKey: "nav.setupSubscription" as const, icon: CloudDownload, step: 1 },
-  { to: ROUTES.setupCampus, labelKey: "nav.setupCampus" as const, icon: GraduationCap, step: 2 },
-  { to: ROUTES.setupSsh, labelKey: "nav.setupSsh" as const, icon: TerminalSquare, step: 3 },
+  { to: ROUTES.setupSubscription, labelKey: "nav.setupSubscription" as const, icon: CloudDownload },
+  { to: ROUTES.setupCampus, labelKey: "nav.setupCampus" as const, icon: GraduationCap },
+  { to: ROUTES.setupSsh, labelKey: "nav.setupSsh" as const, icon: TerminalSquare },
 ];
 
 export function Sidebar() {
@@ -33,13 +33,11 @@ export function Sidebar() {
     to,
     label,
     icon: Icon,
-    step,
     badge,
   }: {
     to: string;
     label: string;
     icon: typeof LayoutDashboard;
-    step?: number;
     badge?: string;
   }) => (
     <NavLink
@@ -49,7 +47,6 @@ export function Sidebar() {
       <Icon size={16} strokeWidth={1.9} />
       <span className="flex-1 truncate">{label}</span>
       {badge ? <span className="chip !px-1.5 !py-0 text-[10px]">{badge}</span> : null}
-      {step ? <span className="text-[10.5px] text-ink-muted">{step}</span> : null}
     </NavLink>
   );
 
@@ -66,7 +63,7 @@ export function Sidebar() {
       <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto">
         <NavItem to={ROUTES.dashboard} label={t("nav.dashboard")} icon={LayoutDashboard} />
         <div className="mt-3 mb-1 px-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-muted">
-          {t("nav.setup")}
+          {t("configTabs.parallel")}
           {!ready ? (
             <span className="ml-1.5 rounded bg-[var(--warn)]/15 px-1 py-0.5 text-[9px] normal-case text-[var(--warn)]">
               {t("nav.firstRun")}
@@ -74,13 +71,7 @@ export function Sidebar() {
           ) : null}
         </div>
         {wizardItems.map((item) => (
-          <NavItem
-            key={item.to}
-            to={item.to}
-            label={t(item.labelKey)}
-            icon={item.icon}
-            step={item.step}
-          />
+          <NavItem key={item.to} to={item.to} label={t(item.labelKey)} icon={item.icon} />
         ))}
         <div className="mt-3 mb-1 px-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-muted">
           {t("nav.merge")}
@@ -100,7 +91,7 @@ export function Sidebar() {
         </div>
         <div className="mt-1.5 flex items-center justify-between text-[10.5px] text-ink-muted">
           <span>{engine?.mode === "tun" ? t("mode.tun") : engine?.running ? t("mode.systemProxy") : t("status.idle")}</span>
-          <span>v0.1.0</span>
+          <span>v{APP_VERSION}</span>
         </div>
       </div>
     </aside>

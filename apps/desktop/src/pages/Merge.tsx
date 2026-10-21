@@ -6,6 +6,7 @@ import {
   FileCode2,
   GraduationCap,
   Layers,
+  Network,
   Play,
   RefreshCw,
   Route,
@@ -16,8 +17,8 @@ import {
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
+import { ConfigTabs } from "@/components/features/ConfigTabs";
 import { DiagnosticsPanel } from "@/components/features/DiagnosticsPanel";
-import { WizardStepper } from "@/components/features/WizardStepper";
 import { PageHeader } from "@/components/layout/PageHeader";
 import {
   Badge,
@@ -27,6 +28,7 @@ import {
   CodeBlock,
   Field,
   Segmented,
+  Select,
   Switch,
   Textarea,
   TextInput,
@@ -48,6 +50,9 @@ export function Merge() {
   const validateRules = useAppStore((state) => state.validateRules);
   const busy = useAppStore((state) => state.busy);
   const engine = useAppStore((state) => state.engine);
+  const nodeCandidates = useAppStore((state) => state.nodeCandidates);
+  const loadNodeCandidates = useAppStore((state) => state.loadNodeCandidates);
+  const chooseNode = useAppStore((state) => state.chooseNode);
   const navigate = useNavigate();
 
   const [preset, setPreset] = useState<RoutingPreset>("smart");
@@ -59,6 +64,11 @@ export function Merge() {
   const [extraDomains, setExtraDomains] = useState("");
   const [previewTab, setPreviewTab] = useState<"rules" | "yaml">("rules");
   const [showPreview, setShowPreview] = useState(false);
+  const [nodeMode, setNodeMode] = useState<"auto" | "manual">("auto");
+  const [nodeSelected, setNodeSelected] = useState("");
+  const [nodeTestUrl, setNodeTestUrl] = useState("http://www.gstatic.com/generate_204");
+  const [nodeInterval, setNodeInterval] = useState(300);
+  const [nodeTolerance, setNodeTolerance] = useState(50);
 
   useEffect(() => {
     if (!config) return;
@@ -69,13 +79,29 @@ export function Merge() {
     setHighPriority(config.routing.customRulesHighPriority);
     setCustomRules(config.routing.customRules.join("\n"));
     setExtraDomains(config.routing.extraCampusDomains.join("\n"));
+    setNodeMode(config.nodeSelection.mode);
+    setNodeSelected(config.nodeSelection.selected ?? "");
+    setNodeTestUrl(config.nodeSelection.testUrl);
+    setNodeInterval(config.nodeSelection.intervalSeconds);
+    setNodeTolerance(config.nodeSelection.toleranceMs);
     void loadPreview();
   }, [config, loadPreview]);
+
+  useEffect(() => {
+    void loadNodeCandidates();
+  }, [loadNodeCandidates]);
 
   const buildDraft = () => {
     if (!config) return null;
     return {
       ...config,
+      nodeSelection: {
+        mode: nodeMode,
+        selected: nodeSelected.trim() ? nodeSelected.trim() : null,
+        testUrl: nodeTestUrl.trim(),
+        intervalSeconds: nodeInterval,
+        toleranceMs: nodeTolerance,
+      },
       routing: {
         ...config.routing,
         preset,
@@ -103,6 +129,18 @@ export function Merge() {
     return ok;
   };
 
+  const saveNodePolicy = async () => {
+    if (!config) return;
+    const draft = buildDraft();
+    if (!draft) return;
+    const ok = await saveConfig(draft);
+    if (!ok) return;
+    if (engine?.running) {
+      await applyConfig();
+    }
+    await loadNodeCandidates();
+  };
+
   const finish = async (andConnect: boolean) => {
     const draft = buildDraft();
     if (!draft) return;
@@ -127,9 +165,9 @@ export function Merge() {
 
   return (
     <>
-      <WizardStepper current={4} />
+      <ConfigTabs />
       <PageHeader
-        eyebrow={`${t("wizard.titleSuffix")} · STEP 4`}
+        eyebrow={t("configTabs.parallel")}
         title={t("merge.title")}
         subtitle={t("merge.subtitle")}
         actions={
@@ -198,6 +236,87 @@ export function Merge() {
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
         <div className="space-y-5 xl:col-span-2">
+          <Card>
+            <CardHeader
+              title={t("nodeSelection.title")}
+              subtitle={t("nodeSelection.hint")}
+              icon={<Network size={15} />}
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                size="sm"
+                variant={nodeMode === "auto" ? "primary" : "secondary"}
+                onClick={() => setNodeMode("auto")}
+              >
+                {t("nodeSelection.auto")}
+              </Button>
+              <Button
+                size="sm"
+                variant={nodeMode === "manual" ? "primary" : "secondary"}
+                onClick={() => setNodeMode("manual")}
+              >
+                {t("nodeSelection.manual")}
+              </Button>
+            </div>
+            {nodeMode === "auto" ? (
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <Field label={t("nodeSelection.testUrl")} className="col-span-2">
+                  <TextInput
+                    value={nodeTestUrl}
+                    onChange={(event) => setNodeTestUrl(event.target.value)}
+                    className="font-mono text-[12px]"
+                    placeholder="http://www.gstatic.com/generate_204"
+                  />
+                </Field>
+                <Field label={t("nodeSelection.interval")} hint={t("nodeSelection.intervalHint")}>
+                  <TextInput
+                    type="number"
+                    value={nodeInterval}
+                    onChange={(event) => setNodeInterval(Number(event.target.value))}
+                  />
+                </Field>
+                <Field label={t("nodeSelection.tolerance")}>
+                  <TextInput
+                    type="number"
+                    value={nodeTolerance}
+                    onChange={(event) => setNodeTolerance(Number(event.target.value))}
+                  />
+                </Field>
+              </div>
+            ) : (
+              <div className="mt-3 space-y-3">
+                <Field
+                  label={t("nodeSelection.node")}
+                  hint={nodeCandidates.length === 0 ? t("nodeSelection.noNodes") : undefined}
+                >
+                  <Select
+                    value={nodeSelected}
+                    onChange={(event) => setNodeSelected(event.target.value)}
+                    options={[
+                      { value: "", label: "—" },
+                      ...nodeCandidates.map((name) => ({ value: name, label: name })),
+                    ]}
+                  />
+                </Field>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={!nodeSelected.trim()}
+                  onClick={() => void chooseNode(nodeSelected.trim())}
+                >
+                  <Play size={12} />
+                  {t("nodeSelection.apply")}
+                </Button>
+              </div>
+            )}
+            <div className="mt-3 flex justify-end">
+              <Button size="sm" onClick={() => void saveNodePolicy()} disabled={busy !== null}>
+                <Save size={13} />
+                {t("nodeSelection.save")}
+              </Button>
+            </div>
+          </Card>
+
           <Card>
             <CardHeader
               title={t("merge.preset")}

@@ -151,3 +151,23 @@ tun:
 - 新增规则集 = 新增 `resources/rules/*.yaml` + 在 `rules::providers()` 注册 + 文档登记。
 - 新增预设 = 实现 `preset::Preset` 并注册到 `PRESETS`，前端从同一 API 拉取（不硬编码）。
 - 规则生成器保持纯函数：`build(config, ctx) -> RulePlan`，其中 `RulePlan { groups, providers, rules, warnings }` 可单独快照测试。
+
+## 代理节点选择策略
+
+国外流量最终出口为 `🚀 代理` 组，其节点策略由「融合」页的**国外节点选择**配置决定：
+
+| 模式 | mihomo 生成方式 | 行为 |
+|---|---|---|
+| 自动（默认） | `♻️ 自动选择` 组为 `url-test`，成员为订阅 provider | 按配置的 **测速 URL / 间隔 / 容差** 自动选延迟最低节点并定时切换（mihomo 内置定时器，不需要 App 轮询） |
+| 手动 | `🚀 代理` 组为 `select`，成员仅 provider；App 启动后调用 REST API 固定用户指定节点 | 固定使用所选节点；修改节点时热切换（`PUT /proxies/🚀 代理`），无需重启核心 |
+
+- 测速 URL 默认 `http://www.gstatic.com/generate_204`，间隔默认 300s（允许 30–3600s），容差 50ms。
+- 手动模式下节点列表来自本地订阅缓存（`profiles/profile.yaml` 的 `proxies`）。
+- 策略修改（模式/URL/间隔/容差）会重新生成配置并重启核心；仅切换手动节点为热切换。
+
+## 校园网判定与直连
+
+1. **Ping 校内网关**（默认 `10.134.140.1`）：ping 通 ⇒ 置信度 **100%**，判定在校内；
+   自动跳过 fdu-connect（不建立 RVPN），`🎓 校内` 组切到 `DIRECT`，10/8 与复旦域名/IP 全部直连。
+2. 否则按校内 IP 段 / 校园内网探针 / 复旦 Wi-Fi 综合评分（强证据保底 90%）。
+3. 判断为校内且开启「校内自动跳过 VPN」时，即使 RVPN 已配置也不会启动/会主动停止。

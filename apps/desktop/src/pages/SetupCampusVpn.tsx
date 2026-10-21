@@ -14,9 +14,9 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { CampusCard } from "@/components/features/StatusCards";
-import { WizardStepper } from "@/components/features/WizardStepper";
+import { ConfigTabs } from "@/components/features/ConfigTabs";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { Badge, Button, Card, CardHeader, Field, PasswordInput, Row, Switch, TextInput } from "@/components/ui";
+import { Badge, Button, Card, CardHeader, Field, PasswordInput, Row, Select, Switch, TextInput } from "@/components/ui";
 import { ROUTES, SECRET_KEYS } from "@/lib/constants";
 import type { ExistingVpn, ProbeTarget, VpnTestResult } from "@/lib/types";
 import { useAppStore } from "@/stores/app";
@@ -133,9 +133,9 @@ export function SetupCampusVpn() {
 
   return (
     <>
-      <WizardStepper current={2} />
+      <ConfigTabs />
       <PageHeader
-        eyebrow={`${t("wizard.titleSuffix")} · STEP 2`}
+        eyebrow={t("configTabs.parallel")}
         title={t("setupCampus.title")}
         subtitle={t("setupCampus.subtitle")}
         actions={<Badge tone="info" icon={<GraduationCap size={11} />}>fdu-connect</Badge>}
@@ -278,7 +278,18 @@ export function SetupCampusVpn() {
               <div className="mt-4 space-y-4">
                 <div className="space-y-2">
                   {draft.probeTargets.map((target, index) => (
-                    <div key={index} className="grid grid-cols-[1.4fr_0.7fr_0.6fr_auto] items-center gap-2">
+                    <div key={index} className="grid grid-cols-[0.9fr_1.3fr_0.6fr_0.5fr_auto] items-center gap-2">
+                      <Select
+                        value={target.protocol}
+                        onChange={(event) =>
+                          updateTarget(index, { protocol: event.target.value as ProbeTarget["protocol"] })
+                        }
+                        options={[
+                          { value: "tcp", label: "TCP" },
+                          { value: "udpDns", label: "DNS" },
+                          { value: "icmp", label: "Ping" },
+                        ]}
+                      />
                       <TextInput
                         value={target.host}
                         onChange={(event) => updateTarget(index, { host: event.target.value })}
@@ -288,7 +299,9 @@ export function SetupCampusVpn() {
                       <TextInput
                         type="number"
                         value={target.port}
+                        disabled={target.protocol === "icmp"}
                         onChange={(event) => updateTarget(index, { port: Number(event.target.value) })}
+                        title={target.protocol === "icmp" ? "Ping 无需端口" : "端口"}
                       />
                       <TextInput
                         type="number"
@@ -322,6 +335,10 @@ export function SetupCampusVpn() {
                   >
                     {t("common.add")}
                   </Button>
+                  <div className="rounded-lg border border-[var(--ok)]/20 bg-[var(--ok)]/5 px-2.5 py-1.5 text-[10.5px] leading-4 text-ink-muted">
+                    Ping 探测：ping 通校内网关（默认 <span className="font-mono">10.134.140.1</span>）即
+                    <span className="font-semibold text-[var(--ok)]"> 100% 判定在校内</span>，自动跳过 fdu-connect 并全部直连校内流量。
+                  </div>
                 </div>
                 <Field label="校内 IP 段（每行一个）">
                   <TextInput

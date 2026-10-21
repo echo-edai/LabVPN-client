@@ -71,6 +71,8 @@ pub fn run() {
             commands::connect::engine_status,
             commands::connect::get_proxy_groups,
             commands::connect::select_proxy,
+            commands::connect::get_node_candidates,
+            commands::connect::select_node,
             commands::connect::test_proxy_delay,
             commands::connect::get_campus_status,
             commands::connect::set_campus_override,

@@ -13,7 +13,7 @@ import {
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { WizardStepper } from "@/components/features/WizardStepper";
+import { ConfigTabs } from "@/components/features/ConfigTabs";
 import { PageHeader } from "@/components/layout/PageHeader";
 import {
   Badge,
@@ -110,9 +110,9 @@ export function SetupSsh() {
 
   return (
     <>
-      <WizardStepper current={3} />
+      <ConfigTabs />
       <PageHeader
-        eyebrow={`${t("wizard.titleSuffix")} · STEP 3`}
+        eyebrow={t("configTabs.parallel")}
         title={t("setupSsh.title")}
         subtitle={t("setupSsh.subtitle")}
         actions={<Badge tone="warn" icon={<TerminalSquare size={11} />}>ssh outbound</Badge>}

@@ -10,7 +10,7 @@ pub mod providers;
 
 use serde::{Deserialize, Serialize};
 
-use crate::config::{AppConfig, RoutingPreset};
+use crate::config::{defaults, AppConfig, NodeSelectionMode, RoutingPreset};
 use crate::util;
 use providers::enhanced_providers;
 use providers::{ProviderSpec, AD_BLOCK, CHINA_DOMAIN_FALLBACK, FDU_DOMAIN, FDU_IP, LAN};
@@ -324,23 +324,41 @@ fn build_groups(config: &AppConfig, ctx: &RuleContext) -> Vec<GroupSpec> {
     let mut groups = Vec::new();
     let has_sub = ctx.subscription_available;
 
-    // 订阅自动选择
+    // 订阅节点选择策略（用户可配置测速 URL / 间隔 / 手动固定节点）
+    let node = &config.node_selection;
+    let node_test_url = {
+        let url = node.test_url.trim();
+        if url.is_empty() {
+            defaults::NODE_TEST_URL
+        } else {
+            url
+        }
+    };
     if has_sub {
+        // 自动测速组：间隔与容差来自用户配置（≤30s 由校验拦截）
         groups.push(GroupSpec::url_test(
             names::GROUP_AUTO,
             &[names::PROVIDER_SUB],
-            "http://www.gstatic.com/generate_204",
-            300,
-            50,
+            node_test_url,
+            node.interval_seconds.clamp(30, 3600) as u32,
+            node.tolerance_ms.min(1000) as u32,
         ));
     }
     // 国外总出口
     if has_sub {
-        groups.push(GroupSpec::select_with_providers(
-            names::GROUP_PROXY,
-            &[names::GROUP_AUTO, names::DIRECT],
-            &[names::PROVIDER_SUB],
-        ));
+        match node.mode {
+            NodeSelectionMode::Auto => groups.push(GroupSpec::select_with_providers(
+                names::GROUP_PROXY,
+                &[names::GROUP_AUTO, names::DIRECT],
+                &[names::PROVIDER_SUB],
+            )),
+            // 手动模式：成员为空，仅引用 provider；具体节点由 App 启动后调用 API 固定
+            NodeSelectionMode::Manual => groups.push(GroupSpec::select_with_providers(
+                names::GROUP_PROXY,
+                &[names::DIRECT],
+                &[names::PROVIDER_SUB],
+            )),
+        }
     } else {
         groups.push(GroupSpec::select(names::GROUP_PROXY, &[names::DIRECT]));
     }
@@ -660,6 +678,43 @@ mod tests {
                 .members
                 .contains(&names::REJECT.to_string()));
         }
+    }
+
+    #[test]
+    fn node_selection_manual_and_custom_auto() {
+        let group = |plan: &RulePlan, name: &str| {
+            plan.groups
+                .iter()
+                .find(|group| group.name == name)
+                .unwrap_or_else(|| panic!("缺少组 {name}"))
+                .clone()
+        };
+
+        // 手动模式：代理组为 select，不再默认指向自动测速组
+        let mut config = base_config();
+        config.node_selection.mode = crate::config::NodeSelectionMode::Manual;
+        config.node_selection.selected = Some("香港 01".into());
+        let plan = build(&config, &context());
+        let proxy = group(&plan, names::GROUP_PROXY);
+        assert_eq!(proxy.kind, GroupKind::Select);
+        assert!(!proxy.members.contains(&names::GROUP_AUTO.to_string()));
+        assert!(proxy.providers.contains(&"sub".to_string()));
+
+        // 自动模式：自定义测速 URL / 间隔 / 容差进入 url-test 组
+        let mut config = base_config();
+        config.node_selection.mode = crate::config::NodeSelectionMode::Auto;
+        config.node_selection.test_url = "https://cp.example.com/204".into();
+        config.node_selection.interval_seconds = 120;
+        config.node_selection.tolerance_ms = 80;
+        let plan = build(&config, &context());
+        let auto = group(&plan, names::GROUP_AUTO);
+        assert_eq!(auto.kind, GroupKind::UrlTest);
+        assert_eq!(auto.url.as_deref(), Some("https://cp.example.com/204"));
+        assert_eq!(auto.interval, 120);
+        assert_eq!(auto.tolerance, 80);
+        assert!(group(&plan, names::GROUP_PROXY)
+            .members
+            .contains(&names::GROUP_AUTO.to_string()));
     }
 
     #[test]

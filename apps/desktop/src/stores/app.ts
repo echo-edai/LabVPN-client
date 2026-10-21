@@ -73,6 +73,7 @@ export interface AppStore {
   presets: PresetInfo[];
   logs: LogEntry[];
   proxyGroups: ProxyGroupInfo[];
+  nodeCandidates: string[];
   traffic: TrafficPoint[];
   themeMode: ThemeMode;
   resolvedTheme: ResolvedTheme;
@@ -97,6 +98,8 @@ export interface AppStore {
   testVpn: () => Promise<VpnTestResult | null>;
   testSsh: (host: string, port: number) => Promise<SshTestResult | null>;
   selectProxy: (group: string, name: string) => Promise<void>;
+  loadNodeCandidates: () => Promise<void>;
+  chooseNode: (name: string) => Promise<boolean>;
   testProxyDelay: () => Promise<void>;
   detectVpnBinary: () => Promise<ExistingVpn | null>;
   installHelper: () => Promise<void>;
@@ -146,6 +149,7 @@ export const useAppStore = create<AppStore>()((set, get) => ({
   presets: [],
   logs: [],
   proxyGroups: [],
+  nodeCandidates: [],
   traffic: [],
   themeMode: "dark",
   resolvedTheme: "dark",
@@ -442,6 +446,29 @@ export const useAppStore = create<AppStore>()((set, get) => ({
       set({ busy: null });
       get().pushToast("error", get().t("toast.testFailed"), messageOf(error));
       return null;
+    }
+  },
+
+  loadNodeCandidates: async () => {
+    try {
+      const candidates = await api.getNodeCandidates();
+      set({ nodeCandidates: candidates });
+    } catch (error) {
+      set({ nodeCandidates: [] });
+      get().pushToast("error", get().t("toast.failed"), messageOf(error));
+    }
+  },
+
+  chooseNode: async (name) => {
+    try {
+      await api.selectNode(name);
+      await get().loadNodeCandidates();
+      await get().refresh();
+      get().pushToast("success", get().t("nodeSelection.switched"), name);
+      return true;
+    } catch (error) {
+      get().pushToast("error", get().t("toast.failed"), messageOf(error));
+      return false;
     }
   },
 

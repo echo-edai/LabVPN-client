@@ -2,7 +2,7 @@ import { ArrowLeft, ArrowRight, CloudDownload, Link2, Radio, RefreshCw } from "l
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { WizardStepper } from "@/components/features/WizardStepper";
+import { ConfigTabs } from "@/components/features/ConfigTabs";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Badge, Button, Card, CardHeader, Field, Progress, Row, Switch, TextInput } from "@/components/ui";
 import { ROUTES } from "@/lib/constants";
@@ -23,6 +23,7 @@ export function SetupSubscription() {
   const [name, setName] = useState("");
   const [autoUpdate, setAutoUpdate] = useState(12);
   const [remoteProvider, setRemoteProvider] = useState(true);
+  const [subEnabled, setSubEnabled] = useState(true);
   const [usage, setUsage] = useState<ReturnType<typeof trafficUsage>>(null);
 
   useEffect(() => {
@@ -31,6 +32,7 @@ export function SetupSubscription() {
     setName(config.subscription.name);
     setAutoUpdate(config.subscription.updateIntervalHours);
     setRemoteProvider(config.subscription.useRemoteProvider);
+    setSubEnabled(config.subscription.enabled);
     setUsage(trafficUsage(config.subscription.traffic));
   }, [config]);
 
@@ -40,7 +42,7 @@ export function SetupSubscription() {
       ...config,
       subscription: {
         ...config.subscription,
-        enabled: url.trim().length > 0,
+        enabled: subEnabled && url.trim().length > 0,
         url: url.trim(),
         name: name.trim() || config.subscription.name,
         updateIntervalHours: autoUpdate,
@@ -51,9 +53,9 @@ export function SetupSubscription() {
 
   return (
     <>
-      <WizardStepper current={1} />
+      <ConfigTabs />
       <PageHeader
-        eyebrow={`${t("wizard.titleSuffix")} · STEP 1`}
+        eyebrow={t("configTabs.parallel")}
         title={t("setupSubscription.title")}
         subtitle={t("setupSubscription.subtitle")}
         actions={<Badge tone="brand" icon={<CloudDownload size={11} />}>Clash / mihomo</Badge>}
@@ -86,12 +88,18 @@ export function SetupSubscription() {
                 />
               </Field>
               <div className="flex items-end pb-2">
+                <Switch checked={subEnabled} onChange={setSubEnabled} label={t("common.enabled")} />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="flex items-end pb-2 sm:col-span-1">
                 <Switch
                   checked={remoteProvider}
                   onChange={setRemoteProvider}
                   label={t("setupSubscription.remoteProvider")}
                 />
               </div>
+              <div className="sm:col-span-2" />
             </div>
             <div className="hint">{t("setupSubscription.remoteProviderHint")}</div>
 

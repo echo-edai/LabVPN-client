@@ -93,6 +93,8 @@ export const api = {
   applyConfig: () => call<ConnectOutcome | null>("apply_config"),
   engineStatus: () => call<EngineStatus>("engine_status"),
   getProxyGroups: () => call<ProxyGroupInfo[]>("get_proxy_groups"),
+  getNodeCandidates: () => call<string[]>("get_node_candidates"),
+  selectNode: (name: string) => call<OperationResult>("select_node", { name }),
   selectProxy: (group: string, name: string) =>
     call<OperationResult>("select_proxy", { group, name }),
   testProxyDelay: (name: string) => call<number>("test_proxy_delay", { name }),

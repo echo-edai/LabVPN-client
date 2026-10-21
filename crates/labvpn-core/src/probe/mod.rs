@@ -1,9 +1,11 @@
 //! 校园网多信号探测。
 //!
-//! 信号来源：
-//! 1. 本地物理网卡 IP 是否命中校内网段（强信号）
-//! 2. 内网 TCP / UDP DNS 探针是否可达（强信号，且**绑定物理网卡**以绕过第三方 TUN）
-//! 3. Wi-Fi SSID 是否为复旦校园网（辅助信号）
+//! 信号来源（按可信度）：
+//! 1. **ICMP Ping 校内网关**（默认 10.134.140.1）：ping 通即 **100% 在校内**，
+//!    自动跳过 fdu-connect 并让校内流量全部直连
+//! 2. 本地物理网卡 IP 是否命中校内网段（强信号）
+//! 3. 内网 TCP / UDP DNS 探针是否可达（强信号，且**绑定物理网卡**以绕过第三方 TUN）
+//! 4. Wi-Fi SSID 是否为复旦校园网（辅助信号）
 //!
 //! 输出带置信度的 [`CampusStatus`]，供 UI 展示每个信号的结果，并支持手动覆盖。
 
@@ -212,6 +214,8 @@ pub enum SignalKind {
     TcpProbe,
     /// UDP DNS 探针
     DnsProbe,
+    /// ICMP Ping 探针
+    PingProbe,
     /// Wi-Fi SSID
     Wifi,
     /// 手动覆盖
@@ -359,7 +363,8 @@ pub fn detect_with(
 
     // 2) 网络探针
     for target in &input.targets {
-        if target.host.trim().is_empty() || target.port == 0 {
+        let port_required = !matches!(target.protocol, crate::config::ProbeProtocol::Icmp);
+        if target.host.trim().is_empty() || (port_required && target.port == 0) {
             continue;
         }
         let iface_ref = primary.map(|iface| socket::IfaceRef {
@@ -373,6 +378,9 @@ pub fn detect_with(
             }
             crate::config::ProbeProtocol::UdpDns => {
                 (SignalKind::DnsProbe, format!("DNS {}", target.name))
+            }
+            crate::config::ProbeProtocol::Icmp => {
+                (SignalKind::PingProbe, format!("Ping {}", target.name))
             }
         };
         let bind_note = if let Some(iface) = primary {
@@ -425,6 +433,13 @@ pub fn detect_with(
 fn score(signals: &[SignalResult]) -> (bool, f32) {
     if signals.is_empty() {
         return (false, 0.0);
+    }
+    // 校内网关 ping 通 ⇒ 确定性处于校园内网：100% 置信度，直接跳过 VPN、校内流量全直连
+    if signals
+        .iter()
+        .any(|signal| signal.ok && signal.kind == SignalKind::PingProbe)
+    {
+        return (true, 1.0);
     }
     let total: u32 = signals.iter().map(|signal| u32::from(signal.weight)).sum();
     let positive: u32 = signals
@@ -596,6 +611,33 @@ mod tests {
             .signals
             .iter()
             .any(|signal| signal.kind == SignalKind::TcpProbe && signal.ok));
+    }
+
+    #[test]
+    fn ping_campus_gateway_means_100_percent_campus() {
+        // 经 NAT 路由器上网（本地 IP 非校内段），但能 ping 通校内网关 10.134.140.1
+        let ifaces = vec![InterfaceInfo::wifi(
+            "en0",
+            Some(12),
+            Some("192.168.1.10".parse().unwrap()),
+            Some(24),
+            false,
+        )];
+        let mut answers = HashMap::new();
+        answers.insert("10.134.140.1".to_string(), true);
+        let runner = MockRunner { answers };
+        let input = ProbeInput {
+            targets: default_probe_targets(),
+            campus_cidrs: default_campus_cidrs(),
+            ..Default::default()
+        };
+        let status = detect_with(&runner, &ifaces, &input);
+        assert!(status.on_campus);
+        assert_eq!(status.confidence, 1.0);
+        assert!(status
+            .signals
+            .iter()
+            .any(|signal| signal.kind == SignalKind::PingProbe && signal.ok));
     }
 
     #[test]

@@ -1,7 +1,8 @@
 //! 编排层：把配置、校园网检测、校内 VPN、代理核心、系统代理串成一次「连接」。
 
-use labvpn_core::config::{secret_keys, AppConfig, IssueLevel, SshAuth};
+use labvpn_core::config::{secret_keys, AppConfig, IssueLevel, NodeSelectionMode, SshAuth};
 use labvpn_core::generator::{self, ProfileSource, RuntimeContext, SshRuntime};
+use labvpn_core::rules::names;
 use tauri::{AppHandle, Manager};
 
 use crate::dto::{EngineStatus, VpnStatus};
@@ -140,6 +141,22 @@ pub async fn connect(state: &AppState) -> CmdResult<ConnectResult> {
 
     // 6) 校内分组热切换（不重启核心）
     let _ = state.engine.apply_campus_target(on_campus).await;
+
+    // 6.5) 手动固定节点：热切换到用户指定节点（自动模式由 mihomo url-test 按自定义间隔测速）
+    if config.subscription.enabled && config.node_selection.mode == NodeSelectionMode::Manual {
+        let selected = config
+            .node_selection
+            .selected
+            .as_deref()
+            .map(str::trim)
+            .filter(|name| !name.is_empty());
+        if let Some(name) = selected {
+            match state.engine.select_proxy(names::GROUP_PROXY, name).await {
+                Ok(()) => state.logs.info("engine", format!("已固定代理节点：{name}")),
+                Err(err) => warnings.push(format!("切换代理节点失败（{name}）：{err}")),
+            }
+        }
+    }
 
     // 7) 系统代理
     if mode == EngineMode::SystemProxy && config.engine.system_proxy {

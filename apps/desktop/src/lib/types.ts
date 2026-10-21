@@ -25,7 +25,7 @@ export interface SubscriptionConfig {
   proxyCount: number | null;
 }
 
-export type ProbeProtocol = "tcp" | "udpDns";
+export type ProbeProtocol = "tcp" | "udpDns" | "icmp";
 
 export interface ProbeTarget {
   name: string;
@@ -97,6 +97,16 @@ export interface RoutingConfig {
   extraCampusDomains: string[];
 }
 
+export type NodeSelectionMode = "auto" | "manual";
+
+export interface NodeSelectionConfig {
+  mode: NodeSelectionMode;
+  selected: string | null;
+  testUrl: string;
+  intervalSeconds: number;
+  toleranceMs: number;
+}
+
 export type TunStack = "system" | "gvisor" | "mixed";
 
 export interface TunConfig {
@@ -135,6 +145,7 @@ export interface AppConfig {
   subscription: SubscriptionConfig;
   campusVpn: CampusVpnConfig;
   sshProxy: SshProxyConfig;
+  nodeSelection: NodeSelectionConfig;
   routing: RoutingConfig;
   engine: EngineConfig;
   ui: UiConfig;

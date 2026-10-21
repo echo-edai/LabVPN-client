@@ -70,6 +70,7 @@ function defaultConfig(): AppConfig {
       autoDetectCampus: true,
       skipWhenOnCampus: true,
       probeTargets: [
+        { name: "校内网关(Ping)", host: "10.134.140.1", port: 0, protocol: "icmp", weight: 100, timeoutMs: 2000 },
         { name: "校内镜像站", host: "10.176.52.2", port: 443, protocol: "tcp", weight: 100, timeoutMs: 1500 },
         { name: "校内 DNS(UDP)", host: "202.120.224.26", port: 53, protocol: "udpDns", weight: 90, timeoutMs: 1500 },
         { name: "校内 DNS(TCP)", host: "202.120.224.26", port: 53, protocol: "tcp", weight: 70, timeoutMs: 1500 },
@@ -91,6 +92,13 @@ function defaultConfig(): AppConfig {
       privateKeyPassphraseRef: null,
       hostKeys: [],
       routes: [{ value: "git.internal.example.com" }, { value: "10.8.0.0/24" }],
+    },
+    nodeSelection: {
+      mode: "auto",
+      selected: null,
+      testUrl: "http://www.gstatic.com/generate_204",
+      intervalSeconds: 300,
+      toleranceMs: 50,
     },
     routing: {
       preset: "smart",
@@ -510,6 +518,13 @@ export async function mockInvoke(cmd: string, args?: Record<string, unknown>): P
       return engine;
     case "get_proxy_groups":
       return engine.running ? trafficEngine() : [];
+    case "get_node_candidates":
+      return ["🇭🇰 香港 01", "🇯🇵 日本 02", "🇺🇸 美国 03", "🇸🇬 新加坡 04"];
+    case "select_node": {
+      const name = String(args?.name ?? "");
+      pushLog("info", "engine", `代理节点已固定为：${name}`);
+      return operation(`已固定节点 ${name}`);
+    }
     case "select_proxy": {
       const group = String(args?.group ?? "");
       const name = String(args?.name ?? "");

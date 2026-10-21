@@ -5,6 +5,7 @@
 
 use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroU32;
+use std::process::Command;
 use std::time::{Duration, Instant};
 
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
@@ -43,6 +44,78 @@ pub fn probe(target: &crate::config::ProbeTarget, iface: Option<IfaceRef<'_>>) -
     match target.protocol {
         ProbeProtocol::Tcp => tcp_connect(&target.host, target.port, timeout, iface),
         ProbeProtocol::UdpDns => dns_query(&target.host, target.port, timeout, iface),
+        ProbeProtocol::Icmp => ping(&target.host, timeout, iface),
+    }
+}
+
+/// ICMP Ping 探测（调用系统 ping，Unix 下绑定物理网卡以绕过第三方 TUN）。
+///
+/// **语义**：校内网关 ping 通 ⇒ 100% 处于校园内网（由上层评分逻辑强制置信度 100%）。
+pub fn ping(host: &str, timeout: Duration, iface: Option<IfaceRef<'_>>) -> ProbeAttempt {
+    let target = host.trim();
+    if target.is_empty() {
+        return ProbeAttempt::failed("Ping 目标为空");
+    }
+    let timeout_ms = timeout.as_millis().max(100).to_string();
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let timeout_secs = timeout.as_secs().max(1).to_string();
+
+    let mut command;
+    #[cfg(target_os = "macos")]
+    {
+        command = Command::new("/sbin/ping");
+        command.args(["-c", "1", "-n", "-W", timeout_ms.as_str()]);
+        if let Some(iface) = iface {
+            command.args(["-b", iface.name]);
+        }
+        command.arg(target);
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        command = Command::new("ping");
+        command.args(["-c", "1", "-n", "-W", timeout_secs.as_str()]);
+        if let Some(iface) = iface {
+            command.args(["-I", iface.name]);
+        }
+        command.arg(target);
+    }
+    #[cfg(windows)]
+    {
+        command = Command::new("ping");
+        command.args(["-n", "1", "-w", timeout_ms.as_str()]);
+        command.arg(target);
+    }
+
+    let start = Instant::now();
+    match command.output() {
+        Ok(output) if output.status.success() => {
+            let elapsed = start.elapsed().as_millis() as u64;
+            ProbeAttempt {
+                ok: true,
+                elapsed_ms: elapsed,
+                bound: cfg!(unix) && iface.is_some(),
+                detail: if let Some(iface) = iface {
+                    format!("ICMP 可达 {}ms（已绑定 {}）", elapsed, iface.name)
+                } else {
+                    format!("ICMP 可达 {elapsed}ms")
+                },
+            }
+        }
+        Ok(output) => {
+            let elapsed = start.elapsed().as_millis() as u64;
+            let code = output
+                .status
+                .code()
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "-".to_string());
+            ProbeAttempt {
+                ok: false,
+                elapsed_ms: elapsed,
+                bound: false,
+                detail: format!("ICMP 不可达（ping 退出码 {code}）"),
+            }
+        }
+        Err(err) => ProbeAttempt::failed(format!("执行 ping 失败：{err}")),
     }
 }
 
