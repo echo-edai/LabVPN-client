@@ -135,20 +135,12 @@ pub fn resolve_helper(app: &AppHandle, paths: &AppPaths) -> Option<PathBuf> {
             .join("../../target/debug")
             .join(name),
     );
+    // 已安装到系统的 helper（macOS/Linux）
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    candidates.push(PathBuf::from("/usr/local/libexec/labvpn").join(name));
     candidates
         .into_iter()
         .find(|candidate| is_usable(candidate))
-        .or_else(|| {
-            // 已安装到系统的 helper（macOS/Linux）
-            #[cfg(any(target_os = "macos", target_os = "linux"))]
-            {
-                let installed = PathBuf::from("/usr/local/libexec/labvpn").join(name);
-                if is_usable(&installed) {
-                    return Some(installed);
-                }
-            }
-            None
-        })
 }
 
 /// 读取核心版本（执行 `mihomo -v`）。

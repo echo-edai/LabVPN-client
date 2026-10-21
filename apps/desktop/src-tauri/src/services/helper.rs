@@ -115,6 +115,7 @@ pub async fn shutdown(port: u16, token: &str) -> bool {
 }
 
 /// macOS/Linux 服务定义文件路径。
+#[allow(dead_code)] // Windows 不安装系统服务，该函数仅非 Windows 使用
 pub fn service_definition_path() -> PathBuf {
     #[cfg(target_os = "macos")]
     {
