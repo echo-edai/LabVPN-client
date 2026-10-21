@@ -595,7 +595,8 @@ mod tests {
     fn golden_snapshot() {
         let config = demo_config();
         let generated = generate(&config, &demo_context()).expect("generate");
-        let actual = generated.yaml.clone();
+        // Windows 上 serde_yaml_ng 可能输出 CRLF，快照比较前统一为 LF
+        let actual = generated.yaml.replace("\r\n", "\n");
         let path = concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/tests/fixtures/mihomo-smart.yaml"
@@ -604,9 +605,11 @@ mod tests {
             std::fs::write(path, &actual).expect("write fixture");
             return;
         }
-        let expected = std::fs::read_to_string(path).unwrap_or_else(|_| {
-            panic!("缺少快照文件，请运行 UPDATE_FIXTURES=1 cargo test -p labvpn-core 生成")
-        });
+        let expected = std::fs::read_to_string(path)
+            .unwrap_or_else(|_| {
+                panic!("缺少快照文件，请运行 UPDATE_FIXTURES=1 cargo test -p labvpn-core 生成")
+            })
+            .replace("\r\n", "\n");
         assert_eq!(expected, actual, "生成结果与快照不一致");
     }
 }

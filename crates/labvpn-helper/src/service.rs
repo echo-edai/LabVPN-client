@@ -2,8 +2,10 @@
 
 use std::path::{Path, PathBuf};
 
+#[cfg(target_os = "macos")]
 use labvpn_core::ipc::SERVICE_LABEL;
 
+#[cfg(target_os = "macos")]
 use crate::logging;
 use crate::Options;
 

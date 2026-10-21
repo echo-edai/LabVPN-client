@@ -298,7 +298,8 @@ pub fn elevate(args: &[String]) -> CmdResult<()> {
     }
 }
 
-/// 用单引号转义并拼接命令（用于 osascript）。
+/// 用单引号转义并拼接命令（用于 osascript，仅 macOS 使用）。
+#[cfg(target_os = "macos")]
 fn shell_join(args: &[String]) -> String {
     args.iter()
         .map(|arg| {

@@ -123,6 +123,7 @@ pub fn port_in_use(port: u16) -> bool {
 }
 
 /// 执行命令并返回 stdout（失败返回 None）。
+#[allow(dead_code)]
 pub(crate) fn run_command(program: &str, args: &[&str]) -> Option<String> {
     let output = std::process::Command::new(program)
         .args(args)

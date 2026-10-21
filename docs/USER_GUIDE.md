@@ -95,6 +95,23 @@ Linux 安装为 systemd 服务，Windows 在每次启用 TUN 时请求一次 UAC
 - 检测到校内：**不启动 VPN**，`10.0.0.0/8` 与校内域名走 DIRECT；离开校园网后自动恢复 VPN。
 - 可在总览/第 2 步手动强制「校内 / 校外」，或在设置中关闭自动检测。
 
+## 6.5 从现有配置迁移（Clash Verge / 现有 fdu-connect 服务）
+
+很多同学已经有一套「Clash Verge + launchd/systemd 的 fdu-connect」配置，迁移步骤：
+
+1. **订阅**：把 Clash Verge 里正在用的机场订阅地址粘贴到向导第 1 步即可（节点规则由 LabVPN 重新生成，
+   不需要导入旧配置的 proxies/规则片段）。
+2. **已有 fdu-connect 服务**：
+   - 你的 launchd/systemd 服务如果监听 `127.0.0.1:1080`，可把第 2 步切为「复用模式」，SOCKS 端口填 `1080`；
+   - 建议迁移到「托管模式」：先 `launchctl unload ~/Library/LaunchAgents/com.fdu-connect.plist`
+     （或 `systemctl --user disable --now fdu-connect`），再让 LabVPN 管理 fdu-connect 生命周期，
+     这样校园网检测与自动跳过 VPN 才能生效。
+3. **不要再设置 `dial_direct_proxy`**：LabVPN 由 mihomo 统一分流；旧配置把它指向 Clash 端口
+   会形成环路。托管模式下 LabVPN 生成的 config.toml 已置空。
+4. **关闭其他 TUN**：如果 Shadowrocket / Clash Verge 的 TUN 正在运行，先关闭，避免两个 TUN 抢路由。
+   若必须共存，让 LabVPN 使用系统代理模式（功能受限：裸 IP 流量不会分流）。
+5. 原有 Clash Verge 可以保留但不要同时开启，避免端口（7897/9097/1080/1082）与控制权冲突。
+
 ## 7. 隐私与安全
 
 - 密码、TOTP、私钥口令保存在**本机加密密钥库**（AES-256-GCM + 机器绑定，文件权限 0600）。
