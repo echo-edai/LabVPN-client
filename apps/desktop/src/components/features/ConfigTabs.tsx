@@ -1,4 +1,4 @@
-import { CloudDownload, GraduationCap, Route, TerminalSquare } from "lucide-react";
+import { CloudDownload, GraduationCap, TerminalSquare } from "lucide-react";
 import { NavLink } from "react-router-dom";
 
 import { ROUTES } from "@/lib/constants";
@@ -13,7 +13,6 @@ const tabs = [
   { to: ROUTES.setupSubscription, labelKey: "nav.setupSubscription" as const, icon: CloudDownload, flag: "subscription" },
   { to: ROUTES.setupCampus, labelKey: "nav.setupCampus" as const, icon: GraduationCap, flag: "campus" },
   { to: ROUTES.setupSsh, labelKey: "nav.setupSsh" as const, icon: TerminalSquare, flag: "ssh" },
-  { to: ROUTES.merge, labelKey: "wizard.stepMerge" as const, icon: Route, flag: "merge" },
 ];
 
 export function ConfigTabs() {
@@ -24,7 +23,6 @@ export function ConfigTabs() {
     subscription: Boolean(config?.subscription.enabled && config?.subscription.url.trim()),
     campus: Boolean(config?.campusVpn.enabled),
     ssh: Boolean(config?.sshProxy.enabled),
-    merge: true,
   };
 
   return (
@@ -46,15 +44,13 @@ export function ConfigTabs() {
           >
             <Icon size={13.5} strokeWidth={1.9} />
             {t(labelKey)}
-            {flag !== "merge" ? (
-              <span
-                className={cn(
-                  "ml-0.5 h-1.5 w-1.5 rounded-full",
-                  enabled[flag] ? "bg-[var(--ok)]" : "bg-ink-muted/40",
-                )}
-                title={enabled[flag] ? t("common.enabled") : t("common.disabled")}
-              />
-            ) : null}
+            <span
+              className={cn(
+                "ml-0.5 h-1.5 w-1.5 rounded-full",
+                enabled[flag] ? "bg-[var(--ok)]" : "bg-ink-muted/40",
+              )}
+              title={enabled[flag] ? t("common.enabled") : t("common.disabled")}
+            />
           </NavLink>
         ))}
       </div>

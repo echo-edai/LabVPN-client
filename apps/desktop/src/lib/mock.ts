@@ -234,7 +234,7 @@ const proxyGroups = (): ProxyGroupInfo[] => [
     all: ["🇭🇰 香港 01", "🇯🇵 日本 01", "🇸🇬 新加坡 01"],
     delay: 46,
   },
-  { name: GROUP.campus, kind: "Selector", now: "DIRECT", all: ["DIRECT", "🏫 FDU-RVPN"], delay: null },
+  { name: GROUP.campus, kind: "Selector", now: "DIRECT", all: ["DIRECT", "🏫 校内 VPN"], delay: null },
   { name: GROUP.ssh, kind: "Selector", now: "DIRECT", all: ["DIRECT", "🖥 SSH-203.0.113.10", GROUP.proxy], delay: null },
   { name: GROUP.adblock, kind: "Selector", now: "REJECT", all: ["REJECT", "DIRECT"], delay: null },
   { name: GROUP.final, kind: "Selector", now: GROUP.proxy, all: [GROUP.proxy, "DIRECT"], delay: null },
@@ -348,7 +348,7 @@ tun:
   dns-hijack: [any:53]
   route-exclude-address: [202.120.224.58/32]
 proxies:
-  - name: 🏫 FDU-RVPN
+  - name: 🏫 校内 VPN
     type: socks5
     server: 127.0.0.1
     port: 11080
@@ -360,7 +360,7 @@ proxies:
 proxy-groups:
   - name: 🎓 校内
     type: select
-    proxies: [DIRECT, 🏫 FDU-RVPN]
+    proxies: [DIRECT, 🏫 校内 VPN]
   - name: 🚀 代理
     type: select
     use: [sub]

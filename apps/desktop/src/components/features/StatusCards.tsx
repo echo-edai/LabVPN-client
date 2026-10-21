@@ -19,12 +19,26 @@ import { useAppStore } from "@/stores/app";
 export function CampusCard({ compact = false }: { compact?: boolean }) {
   const t = useAppStore((state) => state.t);
   const campus = useAppStore((state) => state.campus);
+  const config = useAppStore((state) => state.config);
   const refreshCampus = useAppStore((state) => state.refreshCampus);
   const setCampusOverride = useAppStore((state) => state.setCampusOverride);
   const system = useAppStore((state) => state.system);
 
   const onCampus = campus?.onCampus ?? false;
   const override = system?.campusOverride ?? null;
+  const pingHost =
+    config?.campusVpn.probeTargets.find((target) => target.protocol === "icmp")?.host ??
+    "10.134.140.1";
+  const pingSignal = campus?.signals.find((signal) => signal.kind === "pingProbe");
+  const matchedSignals = (campus?.signals ?? []).filter((signal) => signal.ok);
+  const basis = pingSignal?.ok
+    ? `Ping ${pingHost} 可达`
+    : matchedSignals.length > 0
+      ? matchedSignals
+          .slice(0, 2)
+          .map((signal) => `${signal.name}`)
+          .join(" · ")
+      : `Ping ${pingHost} 不可达，其他校内依据也未命中`;
 
   return (
     <Card>
@@ -60,7 +74,7 @@ export function CampusCard({ compact = false }: { compact?: boolean }) {
               {onCampus ? t("status.onCampus") : t("status.offCampus")}
             </div>
             <div className="text-[11px] text-ink-muted">
-              {campus ? `${t("status.confidence")} ${(campus.confidence * 100).toFixed(0)}%` : t("status.campusUnknown")}
+              {campus ? `${t("campusCard.basis")}：${basis}` : t("status.campusUnknown")}
             </div>
           </div>
         </div>
@@ -89,14 +103,15 @@ export function CampusCard({ compact = false }: { compact?: boolean }) {
 
       {campus ? (
         <>
-          <div className="mt-4 flex items-center gap-2">
-            <Progress ratio={campus.confidence} tone={onCampus ? "ok" : "brand"} />
-            <span className="w-9 shrink-0 text-right text-[10.5px] text-ink-muted">
-              {(campus.confidence * 100).toFixed(0)}%
-            </span>
+          <div className="mt-3 flex items-start justify-between gap-2 rounded-lg border border-line bg-card px-2.5 py-2 text-[10.5px] leading-4 text-ink-muted">
+            <span>{t("campusCard.autoSwitch")}</span>
+            <Link to={ROUTES.setupCampus} className="shrink-0 text-brand hover:underline">
+              {t("campusCard.editBasis")}
+            </Link>
           </div>
           <div className="mt-3 max-h-44 space-y-1.5 overflow-y-auto scroll-slim pr-1">
-            {campus.signals
+            {[...campus.signals]
+              .sort((a, b) => Number(b.ok) - Number(a.ok))
               .filter((signal) => (compact ? signal.weight >= 70 : true))
               .slice(0, compact ? 3 : 8)
               .map((signal, index) => (

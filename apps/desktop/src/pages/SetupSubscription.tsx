@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, CloudDownload, Link2, Radio, RefreshCw } from "lucide-react";
+import { ArrowLeft, CloudDownload, Link2, Radio, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -187,11 +187,16 @@ export function SetupSubscription() {
 
       <div className="mt-6 flex items-center justify-between">
         <Button variant="ghost" icon={<ArrowLeft size={14} />} onClick={() => navigate(ROUTES.dashboard)}>
-          {t("common.back")}
+          返回总览
         </Button>
-        <Button variant="primary" onClick={() => navigate(ROUTES.setupCampus)}>
-          {t("common.next")}
-          <ArrowRight size={14} />
+        <Button
+          variant="primary"
+          onClick={async () => {
+            await persistSubscriptionPrefs();
+            navigate(ROUTES.dashboard);
+          }}
+        >
+          {t("common.save")}
         </Button>
       </div>
     </>

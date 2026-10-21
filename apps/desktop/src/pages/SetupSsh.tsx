@@ -1,6 +1,5 @@
 import {
   ArrowLeft,
-  ArrowRight,
   CheckCircle2,
   KeyRound,
   Network,
@@ -311,7 +310,7 @@ export function SetupSsh() {
           <Card>
             <div className="text-[12.5px] font-semibold text-ink">{t("setupSsh.skipHint")}</div>
             <div className="mt-2 flex gap-2">
-              <Button variant="secondary" size="sm" onClick={() => navigate(ROUTES.merge)}>
+              <Button variant="secondary" size="sm" onClick={() => navigate(ROUTES.dashboard)}>
                 {t("common.skip")}
               </Button>
             </div>
@@ -320,18 +319,17 @@ export function SetupSsh() {
       </div>
 
       <div className="mt-6 flex items-center justify-between">
-        <Button variant="ghost" icon={<ArrowLeft size={14} />} onClick={() => navigate(ROUTES.setupCampus)}>
-          {t("common.prev")}
+        <Button variant="ghost" icon={<ArrowLeft size={14} />} onClick={() => navigate(ROUTES.dashboard)}>
+          返回总览
         </Button>
         <Button
           variant="primary"
           onClick={async () => {
             const ok = await persist();
-            if (ok) navigate(ROUTES.merge);
+            if (ok) navigate(ROUTES.dashboard);
           }}
         >
-          {t("common.next")}
-          <ArrowRight size={14} />
+          {t("common.save")}
         </Button>
       </div>
     </>

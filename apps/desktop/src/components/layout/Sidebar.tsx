@@ -74,7 +74,7 @@ export function Sidebar() {
           <NavItem key={item.to} to={item.to} label={t(item.labelKey)} icon={item.icon} />
         ))}
         <div className="mt-3 mb-1 px-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-muted">
-          {t("nav.merge")}
+          {t("nav.tools")}
         </div>
         <NavItem to={ROUTES.merge} label={t("nav.merge")} icon={Route} />
         <NavItem to={ROUTES.logs} label={t("nav.logs")} icon={ScrollText} />

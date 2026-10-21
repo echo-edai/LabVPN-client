@@ -210,7 +210,7 @@ export interface VpnStatus {
   existingInstance: boolean;
 }
 
-export type SignalKind = "ipRange" | "tcpProbe" | "dnsProbe" | "wifi" | "manual";
+export type SignalKind = "ipRange" | "tcpProbe" | "dnsProbe" | "pingProbe" | "wifi" | "manual";
 
 export interface CampusSignal {
   kind: SignalKind;

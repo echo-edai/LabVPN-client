@@ -142,6 +142,17 @@ pub async fn connect(state: &AppState) -> CmdResult<ConnectResult> {
     // 6) 校内分组热切换（不重启核心）
     let _ = state.engine.apply_campus_target(on_campus).await;
 
+    // 6.4) 自动模式：显式把总出口切到自动测速组，避免 mihomo 缓存选择残留
+    if config.subscription.enabled && config.node_selection.mode == NodeSelectionMode::Auto {
+        if let Err(err) = state
+            .engine
+            .select_proxy(names::GROUP_PROXY, names::GROUP_AUTO)
+            .await
+        {
+            warnings.push(format!("设置自动选点失败：{err}"));
+        }
+    }
+
     // 6.5) 手动固定节点：热切换到用户指定节点（自动模式由 mihomo url-test 按自定义间隔测速）
     if config.subscription.enabled && config.node_selection.mode == NodeSelectionMode::Manual {
         let selected = config

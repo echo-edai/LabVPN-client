@@ -81,7 +81,7 @@
 
 ```
 应用 → TUN(mihomo) → 规则匹配
-  ├─ 10.0.0.0/8 / *.fudan.edu.cn → 🎓 校内 → FDU-RVPN(socks5 11080) → 校园内网
+  ├─ 10.0.0.0/8 / *.fudan.edu.cn → 🎓 校内 → 校内 VPN(socks5 11080) → 校园内网
   ├─ SSH 绑定域名/CIDR          → 🐧 SSH   → ssh outbound（公网服务器）
   ├─ CN 域名/IP                 → DIRECT
   ├─ 广告域名                    → REJECT

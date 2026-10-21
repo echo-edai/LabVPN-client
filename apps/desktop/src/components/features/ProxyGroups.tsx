@@ -1,7 +1,21 @@
 import { Gauge, Network, Zap } from "lucide-react";
 
 import { Badge, Button, Card, CardHeader, EmptyState } from "@/components/ui";
+import { GROUP } from "@/lib/constants";
 import { useAppStore } from "@/stores/app";
+
+/** 自动策略说明：让用户理解每个组的用途与是否自动切换。 */
+function groupHint(name: string): string | undefined {
+  if (name === GROUP.campus) {
+    return "自动：校内直连 / 校外经校内 VPN（依据校园网检测自动切换，无需手动选择）";
+  }
+  if (name === GROUP.proxy) return "国外流量出口：按「融合与规则 → 代理节点」策略选择节点";
+  if (name === GROUP.auto) return "延迟自动测速组：按自定义间隔自动切换最低延迟节点";
+  if (name === GROUP.final) return "未命中任何规则的流量兜底";
+  if (name === GROUP.ssh) return "SSH 转发出口：指定目标的 TCP 流量经 SSH 服务器转发";
+  if (name === GROUP.adblock) return "广告/拦截规则命中的流量";
+  return undefined;
+}
 
 export function ProxyGroups({ limit }: { limit?: number }) {
   const t = useAppStore((state) => state.t);
@@ -41,9 +55,18 @@ export function ProxyGroups({ limit }: { limit?: number }) {
                     {group.kind}
                   </Badge>
                 </div>
-                <div className="mt-0.5 truncate text-[11px] text-ink-muted">{group.now ?? "—"}</div>
+                <div className="mt-0.5 truncate text-[11px] text-ink-muted">
+                  {groupHint(group.name) ?? group.now ?? "—"}
+                </div>
+                {group.name === GROUP.campus ? (
+                  <div className="mt-0.5 truncate text-[10.5px] text-ink-muted">
+                    当前出口：{group.now ?? "—"}
+                  </div>
+                ) : null}
               </div>
-              {group.kind === "Selector" ? (
+              {group.name === GROUP.campus ? (
+                <Badge tone="ok" className="shrink-0">自动切换</Badge>
+              ) : group.kind === "Selector" ? (
                 <select
                   className="input h-8 w-[190px] shrink-0 !py-0 text-[11.5px]"
                   value={group.now ?? ""}

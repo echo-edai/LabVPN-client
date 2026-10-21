@@ -162,7 +162,9 @@ pub fn generate(config: &AppConfig, ctx: &RuntimeContext) -> CoreResult<Generate
         external_controller: format!("127.0.0.1:{}", config.engine.controller_port),
         secret: ctx.controller_secret.clone(),
         profile: ProfileSection {
-            store_selected: true,
+            // 关闭「记住手动选择」：节点策略完全由本 App 的配置/接口决定，
+            // 避免 mihomo 缓存中的旧选择（如 DIRECT）覆盖自动/手动策略。
+            store_selected: false,
             store_fake_ip: true,
         },
         dns: build_dns(config),
@@ -527,7 +529,7 @@ mod tests {
         assert!(generated
             .yaml
             .contains("external-controller: 127.0.0.1:9097"));
-        assert!(generated.yaml.contains("name: 🏫 FDU-RVPN"));
+        assert!(generated.yaml.contains("name: 🏫 校内 VPN"));
         assert!(generated.yaml.contains("type: ssh"));
         assert!(generated.yaml.contains("name: 🎓 校内"));
         assert!(generated.yaml.contains("RULE-SET,FDUIP,🎓 校内"));

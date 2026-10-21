@@ -7,7 +7,7 @@ export const GROUP = {
   ssh: "🐧 SSH 转发",
   adblock: "🛑 广告拦截",
   final: "🐟 漏网之鱼",
-  fdu: "🏫 FDU-RVPN",
+  fdu: "🏫 校内 VPN",
 } as const;
 
 export const ROUTES = {
@@ -40,5 +40,5 @@ export const EVENTS = {
   navigateSettings: "navigate://settings",
 } as const;
 
-export const APP_VERSION = "0.1.3";
+export const APP_VERSION = "0.1.4";
 export const MAX_TRAFFIC_POINTS = 60;

@@ -1,6 +1,5 @@
 import {
   ArrowLeft,
-  ArrowRight,
   CheckCircle2,
   GraduationCap,
   KeyRound,
@@ -119,6 +118,24 @@ export function SetupCampusVpn() {
     return ok;
   };
 
+  const pingHost =
+    draft?.probeTargets.find((target) => target.protocol === "icmp")?.host ?? "10.134.140.1";
+
+  const setPingHost = (host: string) => {
+    if (!draft) return;
+    const existing = draft.probeTargets.find((target) => target.protocol === "icmp");
+    const target: ProbeTarget = existing ?? {
+      name: "校内网关(Ping)",
+      host,
+      port: 0,
+      protocol: "icmp",
+      weight: 100,
+      timeoutMs: 2000,
+    };
+    const others = draft.probeTargets.filter((item) => item.protocol !== "icmp");
+    setDraft({ ...draft, probeTargets: [{ ...target, host }, ...others] });
+  };
+
   const updateTarget = (index: number, patch: Partial<ProbeTarget>) => {
     if (!draft) return;
     setDraft({
@@ -182,6 +199,18 @@ export function SetupCampusVpn() {
                   {draft.autoDetectCampus ? t("setupCampus.campusDetect") : t("common.disabled")}
                 </Badge>
               </div>
+              <Field
+                label={t("campusCard.pingTarget")}
+                hint={t("campusCard.pingHint")}
+                className="sm:col-span-2"
+              >
+                <TextInput
+                  value={pingHost}
+                  onChange={(event) => setPingHost(event.target.value)}
+                  placeholder="10.134.140.1"
+                  className="font-mono text-[12px]"
+                />
+              </Field>
             </div>
           </Card>
 
@@ -448,30 +477,18 @@ export function SetupCampusVpn() {
       </div>
 
       <div className="mt-6 flex items-center justify-between">
-        <Button variant="ghost" icon={<ArrowLeft size={14} />} onClick={() => navigate(ROUTES.setupSubscription)}>
-          {t("common.prev")}
+        <Button variant="ghost" icon={<ArrowLeft size={14} />} onClick={() => navigate(ROUTES.dashboard)}>
+          返回总览
         </Button>
-        <div className="flex gap-2">
-          <Button
-            variant="secondary"
-            onClick={async () => {
-              const ok = await persist();
-              if (ok) navigate(ROUTES.setupSsh);
-            }}
-          >
-            {t("common.save")}
-          </Button>
-          <Button
-            variant="primary"
-            onClick={async () => {
-              const ok = await persist();
-              if (ok) navigate(ROUTES.setupSsh);
-            }}
-          >
-            {t("common.next")}
-            <ArrowRight size={14} />
-          </Button>
-        </div>
+        <Button
+          variant="primary"
+          onClick={async () => {
+            await persist();
+            navigate(ROUTES.dashboard);
+          }}
+        >
+          {t("common.save")}
+        </Button>
       </div>
     </>
   );

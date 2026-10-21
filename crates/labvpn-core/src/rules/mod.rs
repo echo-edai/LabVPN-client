@@ -30,7 +30,7 @@ pub mod names {
     /// 兜底组
     pub const GROUP_FINAL: &str = "🐟 漏网之鱼";
     /// 校内 VPN 出口（mihomo proxy 名）
-    pub const PROXY_FDU: &str = "🏫 FDU-RVPN";
+    pub const PROXY_FDU: &str = "🏫 校内 VPN";
     /// 直连
     pub const DIRECT: &str = "DIRECT";
     /// 拒绝

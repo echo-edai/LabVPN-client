@@ -9,7 +9,7 @@ find-process-mode: strict
 external-controller: 127.0.0.1:9097
 secret: test-secret
 profile:
-  store-selected: true
+  store-selected: false
   store-fake-ip: true
 dns:
   enable: true
@@ -54,7 +54,7 @@ tun:
   mtu: 1500
   strict-route: false
 proxies:
-- name: 🏫 FDU-RVPN
+- name: 🏫 校内 VPN
   type: socks5
   server: 127.0.0.1
   port: 11080
@@ -93,7 +93,7 @@ proxy-groups:
 - name: 🎓 校内
   type: select
   proxies:
-  - 🏫 FDU-RVPN
+  - 🏫 校内 VPN
   - DIRECT
 - name: 🐧 SSH 转发
   type: select
