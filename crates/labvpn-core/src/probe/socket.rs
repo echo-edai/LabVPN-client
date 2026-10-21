@@ -4,7 +4,6 @@
 //! 它会抢占默认路由，导致普通探测无法判断"是否在校内"。绑定物理网卡后可绕过 TUN。
 
 use std::net::{IpAddr, SocketAddr};
-#[cfg(unix)]
 use std::num::NonZeroU32;
 use std::time::{Duration, Instant};
 
