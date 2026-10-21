@@ -1,0 +1,37 @@
+{
+  "name": "@labvpn/desktop",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "LabVPN 桌面客户端（Tauri 2 + React 19）",
+  "scripts": {
+    "dev:web": "vite",
+    "dev": "tauri dev",
+    "build:web": "vite build",
+    "build": "tauri build",
+    "typecheck": "tsc --noEmit",
+    "preview": "vite preview",
+    "sidecars": "node ../../scripts/fetch-sidecars.mjs",
+    "icons": "python3 ../../scripts/generate-icons.py",
+    "sync:rules": "node ../../scripts/sync-rules.mjs"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.12.4",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.61.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-router-dom": "^7.18.4",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@tauri-apps/cli": "^2.12.3",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "tailwindcss": "^4.3.3",
+    "typescript": "~5.9.3",
+    "vite": "^8.3.5"
+  }
+}

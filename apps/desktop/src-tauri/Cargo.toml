@@ -20,7 +20,6 @@ tauri-build.workspace = true
 
 [dependencies]
 tauri.workspace = true
-tauri-plugin-opener.workspace = true
 tauri-plugin-autostart.workspace = true
 tauri-plugin-single-instance.workspace = true
 labvpn-core = { path = "../../../crates/labvpn-core" }

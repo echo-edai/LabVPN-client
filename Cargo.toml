@@ -3,7 +3,7 @@ resolver = "2"
 members = [
     "crates/labvpn-core",
     "crates/labvpn-helper",
-    # "apps/desktop/src-tauri",  # 应用层稍后接入
+    "apps/desktop/src-tauri",
 ]
 
 [workspace.package]
@@ -40,7 +40,7 @@ futures-util = "0.3.31"
 libc = "0.2.191"
 if-addrs = "0.13.4"
 # Tauri
-tauri = { version = "2.12.4", features = ["tray-icon", "protocol-asset"] }
+tauri = { version = "2.12.4", features = ["tray-icon"] }
 tauri-build = "2.7.3"
 tauri-plugin-opener = "2.7.2"
 tauri-plugin-autostart = "2.7.0"
