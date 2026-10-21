@@ -19,20 +19,19 @@
    - 现状：新仓库所有 refs（main + v0.1.0~v0.1.7）均为脱敏后历史；旧 SHA 在新仓库返回 422；旧仓库匿名不可见（404）。
 2. **v0.1.7 构建与发布**：GitHub Actions（公开仓库免费额度）四平台构建成功，已发布为 pre-release。
 3. **文档更新**：README 版本/下载/功能/截图、USER_GUIDE 新增「网络看板与 AI 平台 IP 暴露」、ARCHITECTURE 增加分析模块、RULES 更新兜底直连与国内/国外显式规则。
-4. **小红书**：已用 `xiaohongshu-mcp` v2.5.5 发布过一条介绍帖（账号扫码登录），但**配图是旧版 UI**，需要重发（见待办）。
+4. **小红书**：已用 `xiaohongshu-mcp` v2.5.5 重新发布新版介绍帖（5 张最新 UI 截图 + 新功能文案）。
+   旧帖（旧版截图）待手动删除；发布后登录态已清理。
 5. **网络受限时的推送脚本**：新增 `scripts/push-via-api.py`（GitHub HTTPS 被校园网直连阻断时，用 GitHub API 推送提交/标签）。
 
 ## 明日待办（按优先级）
 
-### 1. 小红书图片更新（必做）
-- 现状：已发布帖子里的截图是旧版本 UI；`xiaohongshu-mcp` 只有发布工具，**没有编辑/删除帖子接口**。
-- 方案：用新版截图**重新发布**一条，然后在手机小红书 App 里手动删除旧帖。
-- 新版配图（建议 4 张，均在本仓库 `docs/screenshots/`）：
-  - `dashboard-dark.jpg`（封面）
-  - `analytics.jpg`（网络看板，新功能）
-  - `merge-rules.jpg`（融合与规则）
-  - `setup-subscription.jpg`（并行配置）
-- 发布步骤：
+### 1. 小红书图片更新（已完成 2026-10-22 ✅，剩旧帖删除）
+- 已完成：用新版截图重新发布（5 张：dashboard-dark / analytics / merge-rules / setup-subscription / setup-campus-vpn），
+  登录态已清理。
+- 剩余：在手机小红书 App 手动删除旧帖（同标题，位于新版下面）。
+- 已用配图（5 张，`docs/screenshots/`）：`dashboard-dark.jpg`、`analytics.jpg`、`merge-rules.jpg`、
+  `setup-subscription.jpg`、`setup-campus-vpn.jpg`
+- 下次发布步骤（参考）：
   1. 下载 `xpzouying/xiaohongshu-mcp` v2.5.5 darwin-arm64 两个二进制（mcp + login）；
   2. 启动 MCP 服务（首次会下载内置 Chromium，约 150MB）：
      ```bash

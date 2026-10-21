@@ -1,7 +1,7 @@
-# 小红书发布草稿（配图已更新，待重发）
+# 小红书发布草稿（已发布 2026-10-22，5 图）
 
-> 旧帖配图为旧版本 UI；`xiaohongshu-mcp` 无编辑/删除接口，需重新发布后在手机端删除旧帖。
-> 配图请使用本仓库 `docs/screenshots/` 下的最新截图（本地绝对路径）。
+> 已用 `xiaohongshu-mcp` 重新发布新版（5 张最新截图）；`xiaohongshu-mcp` 无编辑/删除接口，
+> 旧帖需在手机端手动删除。下次重新发布可直接复用本文案 + `docs/screenshots/` 最新截图。
 
 ## 标题
 
@@ -42,3 +42,4 @@
 2. `docs/screenshots/analytics.jpg`（网络看板）
 3. `docs/screenshots/merge-rules.jpg`（融合与规则）
 4. `docs/screenshots/setup-subscription.jpg`（并行配置）
+5. `docs/screenshots/setup-campus-vpn.jpg`（校内 VPN 配置）
