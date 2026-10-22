@@ -47,7 +47,13 @@
 - `echo-edai/LabVPN-client-archive`（含旧提交对象）已通过网页删除，GitHub API 验证已不存在。
 - 当前公开仓库 `echo-edai/LabVPN-client` 为全新对象存储，历史中无敏感信息。
 
-### 3. 可选：正式签名 / 公证
+### 3. 已修复：macOS「已损坏」问题（ad-hoc 签名，v0.1.8）
+- 原因：无 Apple 证书时 Tauri 构建出的 .app 签名无效，Apple Silicon（M 系列）下载后 Gatekeeper 报「已损坏」。
+- 修复：release workflow 在 macOS 未配置证书时自动 `APPLE_SIGNING_IDENTITY=-` 做 ad-hoc 签名，
+  sidecar 也统一 ad-hoc 签名，并在构建后执行 `codesign --verify --deep --strict` 校验。
+- v0.1.8 仍需用户右键打开/在隐私设置允许（非 Apple 公证）。
+
+### 4. 可选：正式签名 / 公证
 - 购买 Apple Developer Program（Developer ID）后配置 GitHub Secrets：`APPLE_SIGNING_IDENTITY`、`APPLE_CERTIFICATE`、`APPLE_CERTIFICATE_PASSWORD`、`APPLE_ID`、`APPLE_PASSWORD`、`APPLE_TEAM_ID`、`KEYCHAIN_PASSWORD`；Windows 证书同理。
 - 配置后重新打 tag 触发 Release，即可实现「下载即安装」。
 

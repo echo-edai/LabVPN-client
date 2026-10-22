@@ -72,21 +72,21 @@ jobs:
       - name: Build privileged helper
         run: node scripts/fetch-sidecars.mjs --helper
 
-      - name: Sign bundled sidecars (macOS, when certificate configured)
+      - name: Sign bundled sidecars (macOS, Developer ID or ad-hoc)
         if: runner.os == 'macOS'
         shell: bash
         env:
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          SEC_APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: |
-          if [ -z "$APPLE_SIGNING_IDENTITY" ]; then
-            echo "未配置 APPLE_SIGNING_IDENTITY，跳过 sidecar 签名"
-            exit 0
-          fi
           for f in apps/desktop/src-tauri/binaries/mihomo apps/desktop/src-tauri/binaries/labvpn-helper apps/desktop/src-tauri/binaries/fdu-connect; do
-            if [ -s "$f" ]; then
-              codesign --force --options runtime --timestamp --sign "$APPLE_SIGNING_IDENTITY" "$f"
+            [ -s "$f" ] || continue
+            if [ -n "$SEC_APPLE_SIGNING_IDENTITY" ]; then
+              codesign --force --options runtime --timestamp --sign "$SEC_APPLE_SIGNING_IDENTITY" "$f"
+            else
+              codesign --force --sign - "$f"
             fi
           done
+          echo "✅ sidecar 签名完成（$( [ -n "$SEC_APPLE_SIGNING_IDENTITY" ] && echo Developer ID || echo ad-hoc )）"
 
       - name: Import Windows certificate (when configured)
         if: runner.os == 'Windows'
@@ -116,9 +116,10 @@ jobs:
           }
           node -e "const fs=require('fs');const p='apps/desktop/src-tauri/tauri.conf.json';const c=JSON.parse(fs.readFileSync(p,'utf8'));c.bundle.windows={...(c.bundle.windows||{}),certificateThumbprint:process.env.WINDOWS_CERT_THUMBPRINT,digestAlgorithm:'sha256',timestampUrl:'http://timestamp.digicert.com'};fs.writeFileSync(p,JSON.stringify(c,null,2));"
 
-      - name: Configure signing environment (only when secrets are provided)
+      - name: Configure signing environment (Developer ID when configured, ad-hoc on macOS otherwise)
         shell: bash
         env:
+          RUNNER_OS: ${{ runner.os }}
           SEC_APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           SEC_APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           SEC_APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -140,6 +141,12 @@ jobs:
           export_env SEC_APPLE_PASSWORD APPLE_PASSWORD
           export_env SEC_APPLE_TEAM_ID APPLE_TEAM_ID
           export_env SEC_KEYCHAIN_PASSWORD KEYCHAIN_PASSWORD
+          # Apple Silicon 上必须存在有效签名（否则下载后 Gatekeeper 会报「已损坏」）；
+          # 未配置 Developer ID 时使用 ad-hoc 签名，至少可右键打开/在隐私设置中允许。
+          if [ "$RUNNER_OS" = "macOS" ] && [ -z "$SEC_APPLE_SIGNING_IDENTITY" ]; then
+            echo "APPLE_SIGNING_IDENTITY=-" >> "$GITHUB_ENV"
+            echo "ℹ️ 未配置 Apple 证书：macOS 使用 ad-hoc 签名"
+          fi
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
@@ -172,6 +179,25 @@ jobs:
           releaseDraft: true
           prerelease: true
           args: ${{ matrix.args }}
+
+      - name: Verify macOS bundle signature
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          APP=""
+          for candidate in \
+            target/release/bundle/macos/LabVPN.app \
+            apps/desktop/src-tauri/target/release/bundle/macos/LabVPN.app; do
+            if [ -d "$candidate" ]; then APP="$candidate"; break; fi
+          done
+          if [ -z "$APP" ]; then
+            echo "❌ 找不到 LabVPN.app，无法校验签名" >&2
+            exit 1
+          fi
+          echo "校验：$APP"
+          codesign -dv --verbose=2 "$APP" 2>&1 | grep -E "Identifier|Signature|flags" | head -4
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          echo "✅ 签名有效（ad-hoc 或 Developer ID）"
 
       - name: Attach fdu-connect source archive (AGPL compliance)
         if: runner.os == 'Linux'
