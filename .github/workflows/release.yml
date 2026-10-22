@@ -184,12 +184,7 @@ jobs:
         if: runner.os == 'macOS'
         shell: bash
         run: |
-          APP=""
-          for candidate in \
-            target/release/bundle/macos/LabVPN.app \
-            apps/desktop/src-tauri/target/release/bundle/macos/LabVPN.app; do
-            if [ -d "$candidate" ]; then APP="$candidate"; break; fi
-          done
+          APP="$(find target apps/desktop/src-tauri/target -maxdepth 6 -type d -name "LabVPN.app" 2>/dev/null | head -1)"
           if [ -z "$APP" ]; then
             echo "❌ 找不到 LabVPN.app，无法校验签名" >&2
             exit 1
