@@ -43,11 +43,9 @@
   5. 发布成功后删除 `.xhs-home`（含登录态），并在手机上删除旧帖。
 - 文案要点：仅交流、不提供任何 VPN/机场订阅或账号、需自备合法复旦账号与订阅、遵守学校规定、欢迎 fork。
 
-### 2. 可选：彻底删除旧归档仓库（待手动操作）
-- `echo-edai/LabVPN-client-archive` 目前为私有，只有你可见；其中仍保留旧提交对象。
-- 当前 token 无 `delete_repo` 权限（`gh auth refresh` 在此环境写 keychain 失败），因此需要手动：
-  **浏览器打开该仓库 Settings → 最下方 Danger Zone → Delete this repository**（输入仓库名确认）。
-- 删除后旧对象唯一副本即被清除；新公开仓库不受影响。
+### 2. ✅ 已彻底删除旧归档仓库（2026-10-22）
+- `echo-edai/LabVPN-client-archive`（含旧提交对象）已通过网页删除，GitHub API 验证已不存在。
+- 当前公开仓库 `echo-edai/LabVPN-client` 为全新对象存储，历史中无敏感信息。
 
 ### 3. 可选：正式签名 / 公证
 - 购买 Apple Developer Program（Developer ID）后配置 GitHub Secrets：`APPLE_SIGNING_IDENTITY`、`APPLE_CERTIFICATE`、`APPLE_CERTIFICATE_PASSWORD`、`APPLE_ID`、`APPLE_PASSWORD`、`APPLE_TEAM_ID`、`KEYCHAIN_PASSWORD`；Windows 证书同理。
