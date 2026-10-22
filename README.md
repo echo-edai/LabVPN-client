@@ -1,5 +1,7 @@
 # LabVPN
 
+[English](README_en.md) | 简体中文
+
 > 复旦校园网 · 机场订阅 · 公网 SSH —— 一个客户端，自动分流。
 
 [![CI](https://github.com/echo-edai/LabVPN-client/actions/workflows/ci.yml/badge.svg)](https://github.com/echo-edai/LabVPN-client/actions/workflows/ci.yml)

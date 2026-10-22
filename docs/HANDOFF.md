@@ -43,16 +43,19 @@
   5. 发布成功后删除 `.xhs-home`（含登录态），并在手机上删除旧帖。
 - 文案要点：仅交流、不提供任何 VPN/机场订阅或账号、需自备合法复旦账号与订阅、遵守学校规定、欢迎 fork。
 
-### 2. 可选：彻底删除旧归档仓库
+### 2. 可选：彻底删除旧归档仓库（待手动操作）
 - `echo-edai/LabVPN-client-archive` 目前为私有，只有你可见；其中仍保留旧提交对象。
-- 彻底清除：GitHub 网页 → 该仓库 Settings → Danger Zone → Delete，或给 token 增加 `delete_repo` 权限后删除。
+- 当前 token 无 `delete_repo` 权限（`gh auth refresh` 在此环境写 keychain 失败），因此需要手动：
+  **浏览器打开该仓库 Settings → 最下方 Danger Zone → Delete this repository**（输入仓库名确认）。
+- 删除后旧对象唯一副本即被清除；新公开仓库不受影响。
 
 ### 3. 可选：正式签名 / 公证
 - 购买 Apple Developer Program（Developer ID）后配置 GitHub Secrets：`APPLE_SIGNING_IDENTITY`、`APPLE_CERTIFICATE`、`APPLE_CERTIFICATE_PASSWORD`、`APPLE_ID`、`APPLE_PASSWORD`、`APPLE_TEAM_ID`、`KEYCHAIN_PASSWORD`；Windows 证书同理。
 - 配置后重新打 tag 触发 Release，即可实现「下载即安装」。
 
 ### 4. 文档/截图后续
-- 可选：README 英文版；浅色主题全页面截图；`docs/screenshots/` 文件名统一。
+- [x] README 英文版：`README_en.md`（中文 README 顶部已加语言切换）
+- 可选：浅色主题全页面截图；`docs/screenshots/` 文件名统一。
 
 ## 环境注意事项
 
