@@ -184,7 +184,10 @@ jobs:
         if: runner.os == 'macOS'
         shell: bash
         run: |
-          APP="$(find target apps/desktop/src-tauri/target -maxdepth 6 -type d -name "LabVPN.app" 2>/dev/null | head -1)"
+          APP="$(find target -maxdepth 6 -type d -name "LabVPN.app" 2>/dev/null | head -1 || true)"
+          if [ -z "$APP" ]; then
+            APP="$(find . -maxdepth 8 -type d -name "LabVPN.app" 2>/dev/null | head -1 || true)"
+          fi
           if [ -z "$APP" ]; then
             echo "❌ 找不到 LabVPN.app，无法校验签名" >&2
             exit 1
