@@ -38,6 +38,16 @@ pub struct IfaceRef<'a> {
     pub index: Option<u32>,
 }
 
+/// Windows 下创建子进程时隐藏控制台窗口（GUI 程序 spawn 控制台程序不会黑框闪烁）。
+#[cfg(windows)]
+fn hidden_command(program: &str) -> Command {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    let mut command = Command::new(program);
+    command.creation_flags(CREATE_NO_WINDOW);
+    command
+}
+
 /// 按协议执行一次探测。
 pub fn probe(target: &crate::config::ProbeTarget, iface: Option<IfaceRef<'_>>) -> ProbeAttempt {
     let timeout = Duration::from_millis(target.timeout_ms.max(100));
@@ -82,7 +92,7 @@ pub fn ping(host: &str, timeout: Duration, iface: Option<IfaceRef<'_>>) -> Probe
     }
     #[cfg(windows)]
     {
-        command = Command::new("ping");
+        command = hidden_command("ping");
         command.args(["-n", "1", "-w", timeout_ms.as_str()]);
         command.arg(target);
     }

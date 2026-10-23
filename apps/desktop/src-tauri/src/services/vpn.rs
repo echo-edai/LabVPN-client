@@ -23,6 +23,18 @@ use crate::paths::AppPaths;
 use crate::services::logs::LogStore;
 use crate::services::secrets::SecretStore;
 
+/// 创建 fdu-connect 子进程命令；Windows 下隐藏控制台窗口（避免黑框/抢焦点）。
+fn fdu_command(binary: &Path) -> Command {
+    #[allow(unused_mut)]
+    let mut command = Command::new(binary);
+    #[cfg(windows)]
+    {
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    command
+}
+
 /// 就绪判定关键字
 const READY_MARKERS: &[&str] = &[
     "SOCKS5 server listening on",
@@ -206,7 +218,7 @@ impl VpnManager {
         self.logs
             .info("vpn", format!("启动 fdu-connect：{}", binary.display()));
 
-        let mut command = Command::new(&binary);
+        let mut command = fdu_command(&binary);
         command.arg("-config").arg(&paths.vpn_config_file);
         for extra in &config.extra_args {
             if !extra.trim().is_empty() {
@@ -384,7 +396,7 @@ impl VpnManager {
             let _ = std::fs::set_permissions(&test_config, std::fs::Permissions::from_mode(0o600));
         }
 
-        let mut child = Command::new(&binary)
+        let mut child = fdu_command(&binary)
             .arg("-config")
             .arg(&test_config)
             .stdin(std::process::Stdio::null())
@@ -563,7 +575,7 @@ pub fn detect_existing(app: &AppHandle, config: &CampusVpnConfig, paths: &AppPat
     let service_label = {
         #[cfg(target_os = "macos")]
         {
-            let output = std::process::Command::new("launchctl")
+            let output = crate::platform::hidden_command("launchctl")
                 .arg("list")
                 .output()
                 .ok();
@@ -705,7 +717,7 @@ skip_domain_resource = false
 disable_fdu_config = {disable_fdu_config}
 disable_fdu_dns = {disable_fdu_dns}
 disable_multi_line = false
-proxy_all = false
+proxy_all = {proxy_all}
 socks_bind = "127.0.0.1:{socks_port}"
 socks_user = ""
 socks_passwd = ""
@@ -735,6 +747,7 @@ custom_proxy_domain = [
         totp = escape_toml(totp.unwrap_or("")),
         server_address = escape_toml(server_address),
         server_port = config.port,
+        proxy_all = config.proxy_all,
         disable_fdu_config = config.disable_fdu_config,
         disable_fdu_dns = config.disable_fdu_dns,
         socks_port = socks_port,
@@ -781,5 +794,24 @@ mod tests {
         assert!(toml.contains("socks_bind = \"127.0.0.1:11080\""));
         assert!(toml.contains("science.org"));
         assert!(toml.contains("dial_direct_proxy = \"\""));
+        // 默认路由默认开启（校园 VPN 全走 RVPN 隧道）
+        assert!(toml.contains("proxy_all = true"));
+    }
+
+    #[test]
+    fn writes_proxy_all_toggle() {
+        let config = CampusVpnConfig {
+            proxy_all: false,
+            ..Default::default()
+        };
+        let toml = build_config_toml(&config, "pw", None, "stuvpn.fudan.edu.cn", 11080);
+        assert!(toml.contains("proxy_all = false"));
+
+        let config = CampusVpnConfig {
+            proxy_all: true,
+            ..Default::default()
+        };
+        let toml = build_config_toml(&config, "pw", None, "stuvpn.fudan.edu.cn", 11080);
+        assert!(toml.contains("proxy_all = true"));
     }
 }

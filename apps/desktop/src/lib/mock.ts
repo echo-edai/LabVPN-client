@@ -57,6 +57,8 @@ function defaultConfig(): AppConfig {
         expire: Math.floor(Date.now() / 1000) + 86_400 * 62,
       },
       proxyCount: 68,
+      fetchMode: "auto",
+      fetchProxy: null,
     },
     campusVpn: {
       enabled: true,
@@ -81,6 +83,7 @@ function defaultConfig(): AppConfig {
       ],
       campusCidrs: ["10.188.0.0/16", "202.120.0.0/16", "2001:da8:8001::/48"],
       customProxyDomains: ["science.org", "nature.com"],
+      proxyAll: true,
       disableFduConfig: false,
       disableFduDns: false,
     },

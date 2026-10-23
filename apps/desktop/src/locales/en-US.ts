@@ -138,6 +138,8 @@ export const enUS: Partial<Record<MessageKey, string>> = {
   "setupCampus.overrideOn": "Force on-campus",
   "setupCampus.overrideOff": "Force off-campus",
   "setupCampus.refreshDetect": "Re-detect",
+  "setupCampus.proxyAll": "Campus VPN default route",
+  "setupCampus.proxyAllHint": "Route everything handed to the campus VPN through the RVPN tunnel; fixes hosts the RVPN rules don't cover (e.g. Danta's static.fduhole.com)",
 
   "setupSsh.title": "SSH forward",
   "setupSsh.subtitle": "Use a public server's SSH as an outbound proxy for chosen domains / CIDRs",

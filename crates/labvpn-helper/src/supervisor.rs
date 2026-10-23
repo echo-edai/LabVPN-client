@@ -110,6 +110,12 @@ impl Supervisor {
             .map_err(|err| format!("复制日志句柄失败: {err}"))?;
 
         let mut command = Command::new(&self.core_path);
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+            command.creation_flags(CREATE_NO_WINDOW);
+        }
         command
             .arg("-d")
             .arg(&self.workdir)

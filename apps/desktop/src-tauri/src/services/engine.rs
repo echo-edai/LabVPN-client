@@ -193,7 +193,8 @@ impl EngineManager {
                 &yaml,
                 &request.assets,
             )?;
-            let mut child = Command::new(&core_path)
+            let mut core_command = Command::new(&core_path);
+            core_command
                 .arg("-d")
                 .arg(&request.workdir)
                 .arg("-f")
@@ -201,7 +202,14 @@ impl EngineManager {
                 .stdin(std::process::Stdio::null())
                 .stdout(std::process::Stdio::piped())
                 .stderr(std::process::Stdio::piped())
-                .kill_on_drop(false)
+                .kill_on_drop(false);
+            #[cfg(windows)]
+            {
+                // GUI 应用启动控制台程序时不创建新窗口，避免黑框闪烁/抢焦点
+                const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+                core_command.creation_flags(CREATE_NO_WINDOW);
+            }
+            let mut child = core_command
                 .spawn()
                 .map_err(|err| CommandError::new("engine", format!("启动核心失败: {err}")))?;
             let stdout = child.stdout.take();
@@ -558,7 +566,7 @@ async fn wait_port_open(port: u16, timeout: Duration) -> bool {
 
 #[cfg(unix)]
 fn process_is_core(pid: u32) -> bool {
-    std::process::Command::new("ps")
+    crate::platform::hidden_command("ps")
         .args(["-p", &pid.to_string(), "-o", "command="])
         .output()
         .map(|output| {
@@ -571,7 +579,7 @@ fn process_is_core(pid: u32) -> bool {
 
 #[cfg(windows)]
 fn process_is_core(pid: u32) -> bool {
-    std::process::Command::new("tasklist")
+    crate::platform::hidden_command("tasklist")
         .args(["/FI", &format!("PID eq {pid}"), "/NH"])
         .output()
         .map(|output| {
@@ -584,7 +592,7 @@ fn process_is_core(pid: u32) -> bool {
 
 #[cfg(unix)]
 fn pid_alive(pid: u32) -> bool {
-    std::process::Command::new("kill")
+    crate::platform::hidden_command("kill")
         .args(["-0", &pid.to_string()])
         .status()
         .map(|status| status.success())
@@ -593,7 +601,7 @@ fn pid_alive(pid: u32) -> bool {
 
 #[cfg(windows)]
 fn pid_alive(pid: u32) -> bool {
-    std::process::Command::new("tasklist")
+    crate::platform::hidden_command("tasklist")
         .args(["/FI", &format!("PID eq {pid}"), "/NH"])
         .output()
         .map(|output| String::from_utf8_lossy(&output.stdout).contains(&pid.to_string()))
@@ -602,14 +610,14 @@ fn pid_alive(pid: u32) -> bool {
 
 #[cfg(unix)]
 fn kill_pid(pid: u32) {
-    let _ = std::process::Command::new("kill")
+    let _ = crate::platform::hidden_command("kill")
         .args(["-9", &pid.to_string()])
         .status();
 }
 
 #[cfg(windows)]
 fn kill_pid(pid: u32) {
-    let _ = std::process::Command::new("taskkill")
+    let _ = crate::platform::hidden_command("taskkill")
         .args(["/PID", &pid.to_string(), "/F"])
         .status();
 }

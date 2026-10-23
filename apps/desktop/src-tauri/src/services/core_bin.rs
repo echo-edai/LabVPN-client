@@ -157,7 +157,7 @@ pub fn resolve_helper(app: &AppHandle, paths: &AppPaths) -> Option<PathBuf> {
 
 /// 读取核心版本（执行 `mihomo -v`）。
 pub fn core_version(core_path: &Path) -> Option<String> {
-    let output = std::process::Command::new(core_path)
+    let output = crate::platform::hidden_command(core_path)
         .arg("-v")
         .output()
         .ok()?;

@@ -23,6 +23,8 @@ const checkOnly = process.argv.includes("--check");
 const EXTRA_DOMAINS = [
   "DOMAIN-SUFFIX,fdu.edu.cn",
   "DOMAIN-SUFFIX,fudanpress.com",
+  // 研究生选课/课表备用域名（旦挞等客户端会回退访问 yjsxktest.fudan.sh.cn）
+  "DOMAIN-SUFFIX,fudan.sh.cn",
 ];
 
 async function fetchLines(file) {

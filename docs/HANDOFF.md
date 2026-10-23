@@ -5,7 +5,7 @@
 ## 当前状态
 
 - **公开仓库**：<https://github.com/echo-edai/LabVPN-client>（全新对象存储的干净历史）
-- **最新版本**：`v0.1.8`（预发布；原 v0.1.7 已标注 macOS 用户改用 v0.1.8）
+- **最新版本**：`v0.1.9`（预发布；修复 GitHub issues #4/#5/#6：Windows 黑框、file:// 三斜杠、订阅 IP 鉴权 403）
   - 修复 Apple Silicon（M 系列）从 Release 下载后提示「已损坏」的问题：macOS 无证书时自动 ad-hoc 签名
   - 资产：macOS ARM/Intel dmg、Windows exe/msi、Ubuntu deb/AppImage、AlmaLinux rpm、fdu-connect 源码归档
 - 本机 App：v0.1.7 已构建、ad-hoc 签名并运行中
@@ -92,5 +92,5 @@ OLD_REMOTE=<远端 main sha> BASE_LOCAL=<上次推送的本地提交> NEW_LOCAL=
 ## 关键链接
 
 - 仓库：<https://github.com/echo-edai/LabVPN-client>
-- Release：<https://github.com/echo-edai/LabVPN-client/releases/tag/v0.1.8>
+- Release：<https://github.com/echo-edai/LabVPN-client/releases/tag/v0.1.9>
 - 旧仓库（私有归档）：`echo-edai/LabVPN-client-archive`

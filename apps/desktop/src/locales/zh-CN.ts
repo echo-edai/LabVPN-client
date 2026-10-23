@@ -183,6 +183,15 @@ export const zhCN = {
   "setupSubscription.importOk": "订阅导入成功",
   "setupSubscription.testOk": "订阅地址可用",
   "setupSubscription.initHint": "还没有订阅？可以先用自己已有的 Clash 订阅地址，或稍后在设置中再配置。",
+  "setupSubscription.fetchMode": "订阅拉取方式",
+  "setupSubscription.fetchModeHint": "部分机场对订阅来源 IP 做了白名单，直连会 403。",
+  "setupSubscription.fetchModeAuto": "自动（直连→本机代理→系统代理）",
+  "setupSubscription.fetchModeDirect": "仅直连",
+  "setupSubscription.fetchModeSystem": "系统代理",
+  "setupSubscription.fetchModeCustom": "自定义代理",
+  "setupSubscription.fetchProxy": "代理地址",
+  "setupSubscription.fetchProxyHint": "支持 http://host:port 或纯端口（如 7897）",
+  "setupSubscription.fetchIpAuthHint": "若导入时报 HTTP 403 / AUTH_FAIL（IP 鉴权），请把拉取方式改为「自定义代理」并填入本机代理端口（Clash Verge 默认 7897），或改用「系统代理」。",
 
   // 校内 VPN 页
   "setupCampus.title": "配置校内 VPN",
@@ -219,6 +228,8 @@ export const zhCN = {
   "setupCampus.advanced": "高级：探测目标与校内网段",
   "setupCampus.extraDomains": "额外走校内的域名",
   "setupCampus.extraDomainsHint": "每行一个域名，例如 science.org（会同时写入 RVPN 强制代理）",
+  "setupCampus.proxyAll": "校园 VPN 默认路由",
+  "setupCampus.proxyAllHint": "交给校内 VPN 的流量全部经 RVPN 隧道；修复 RVPN 未收录、但同样需要校内出口的域名（如旦挞的 static.fduhole.com）",
   "setupCampus.totpOptional": "（可选）",
 
   // SSH 页

@@ -2,7 +2,38 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [0.1.8] — 预发布（当前）
+## [Unreleased]
+
+### Added
+- **校园 VPN 默认路由（`proxyAll`）**：生成的 `fdu-connect` 配置新增 `proxy_all = true`，
+  交给校内 VPN 的流量**全部由 RVPN 隧道承载**，不再由 RVPN 的域名/网段规则判断为“直连”。
+  「校内 VPN → 高级」新增开关，默认开启。
+  背景：旦挞（DanXi / Danta）的 `static.fduhole.com` 解析到公网 CDN 后被 RVPN 判为直连，
+  又被 TUN 抓回并按校内 DNS 解析（离校不可达），导致其请求反复失败；开启默认路由后恢复正常。
+- 复旦域名规则补充 `fudan.sh.cn`（研究生选课/课表备用域名，旦挞会回退访问
+  `yjsxktest.fudan.sh.cn`），同步写入 `scripts/sync-rules.mjs` 的本地补充列表。
+
+### Fixed
+- 校内服务在「RVPN 视为直连」的目标上失败的问题（表现为校内网/旦挞部分功能打不开）。
+
+## [0.1.9] — 预发布（当前）
+
+### Fixed（GitHub issues #4 / #5 / #6）
+- **Windows 控制台黑框闪烁/抢焦点（#4）**：所有子进程统一通过 `hidden_command` 创建，
+  Windows 下设置 `CREATE_NO_WINDOW`；覆盖平台查询、mihomo 核心、fdu-connect、helper 提权、
+  注册表读取、ping 探针等全部 spawn 路径。
+- **`file://` 三斜杠写法（#5）**：重写 file URL 解析，兼容 `file:///C:/...`、`file://C:/...`、
+  `file://localhost/...`、Unix 路径与百分号编码（空格/中文）；错误提示区分格式错误与文件不存在。
+- **订阅拉取不走代理导致 IP 鉴权机场 403（#6）**：
+  - 新增「订阅拉取方式」：自动 / 仅直连 / 系统代理 / 自定义代理（支持 `http://host:port` 或纯端口）；
+  - 自动模式依次尝试 直连 → 本机 mihomo → 系统代理 → 自定义代理 → 环境变量代理；
+  - 拉取失败时显示服务端响应体（如 `AUTH_FAIL / IP鉴权失败`）与排查建议；
+  - 通过代理拉取时自动切换为本地缓存 provider，避免 mihomo 直连刷新再次 403。
+
+### Changed
+- 订阅请求不再复用共享 HTTP 客户端，每次按通道构建（避免代理配置互相影响）。
+
+## [0.1.8] — 预发布
 
 ### Fixed
 - **修复 Apple Silicon（含 M4）从 Release 下载 dmg 后提示「已损坏，无法打开」**：

@@ -263,6 +263,11 @@ mod tests {
             .rules
             .iter()
             .any(|rule| rule == "DOMAIN-SUFFIX,fudan.edu.cn"));
+        // 研究生选课/课表备用域名（旦挞等客户端会回退访问 yjsxktest.fudan.sh.cn）
+        assert!(fdu_domain
+            .rules
+            .iter()
+            .any(|rule| rule == "DOMAIN-SUFFIX,fudan.sh.cn"));
         let fdu_ip = payloads.iter().find(|p| p.name == FDU_IP).expect("fdu ip");
         assert!(fdu_ip.rules.iter().any(|rule| rule == "IP-CIDR,10.0.0.0/8"));
     }

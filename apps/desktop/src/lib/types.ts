@@ -13,6 +13,8 @@ export interface TrafficInfo {
   expire: number | null;
 }
 
+export type SubscriptionFetchMode = "auto" | "direct" | "systemProxy" | "custom";
+
 export interface SubscriptionConfig {
   enabled: boolean;
   url: string;
@@ -23,6 +25,8 @@ export interface SubscriptionConfig {
   lastUpdated: string | null;
   traffic: TrafficInfo | null;
   proxyCount: number | null;
+  fetchMode: SubscriptionFetchMode;
+  fetchProxy: string | null;
 }
 
 export type ProbeProtocol = "tcp" | "udpDns" | "icmp";
@@ -53,6 +57,8 @@ export interface CampusVpnConfig {
   probeTargets: ProbeTarget[];
   campusCidrs: string[];
   customProxyDomains: string[];
+  /** 校园 VPN 默认路由：交给校内 VPN 的流量全部经 RVPN 隧道 */
+  proxyAll: boolean;
   disableFduConfig: boolean;
   disableFduDns: boolean;
 }

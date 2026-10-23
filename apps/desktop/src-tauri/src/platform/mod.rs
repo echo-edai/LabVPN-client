@@ -122,13 +122,23 @@ pub fn port_in_use(port: u16) -> bool {
     !port_available(port)
 }
 
+/// 创建子进程命令：Windows 下隐藏控制台窗口（避免 GUI 应用闪现黑框/抢焦点）。
+pub(crate) fn hidden_command<P: AsRef<std::ffi::OsStr>>(program: P) -> std::process::Command {
+    #[allow(unused_mut)]
+    let mut command = std::process::Command::new(program);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    command
+}
+
 /// 执行命令并返回 stdout（失败返回 None）。
 #[allow(dead_code)]
 pub(crate) fn run_command(program: &str, args: &[&str]) -> Option<String> {
-    let output = std::process::Command::new(program)
-        .args(args)
-        .output()
-        .ok()?;
+    let output = hidden_command(program).args(args).output().ok()?;
     if !output.status.success() {
         return None;
     }
@@ -145,7 +155,7 @@ pub fn open_path(path: &std::path::Path) -> Result<(), String> {
     let program = "xdg-open";
     #[cfg(not(any(target_os = "macos", windows, target_os = "linux")))]
     let program = "open";
-    std::process::Command::new(program)
+    hidden_command(program)
         .arg(path)
         .spawn()
         .map(|_| ())

@@ -8,7 +8,7 @@ use labvpn_core::probe::CampusStatus;
 use tauri::AppHandle;
 
 use crate::dto::{ConfigEnvelope, CoreInfo};
-use crate::error::{CmdResult, CommandError};
+use crate::error::CmdResult;
 use crate::paths::AppPaths;
 use crate::services::config as config_service;
 use crate::services::core_bin;
@@ -43,8 +43,6 @@ pub struct AppState {
     pub campus: tokio::sync::Mutex<CampusState>,
     /// 校园网手动覆盖
     pub campus_override: RwLock<Option<bool>>,
-    /// HTTP 客户端（订阅）
-    pub http: reqwest::Client,
     /// 核心信息
     pub core: RwLock<CoreInfo>,
     /// 启动时间
@@ -63,10 +61,6 @@ impl AppState {
             logs.warn("config", warning.clone());
         }
         let secrets = SecretStore::load(paths.secrets_file.clone());
-        let http = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(30))
-            .build()
-            .map_err(|err| CommandError::new("http", format!("初始化 HTTP 客户端失败: {err}")))?;
         let engine = EngineManager::new(
             app.clone(),
             Arc::clone(&logs),
@@ -101,7 +95,6 @@ impl AppState {
             vpn,
             campus: tokio::sync::Mutex::new(CampusState { last: None }),
             campus_override: RwLock::new(None),
-            http,
             core: RwLock::new(core_info),
             started_at: Instant::now(),
         })

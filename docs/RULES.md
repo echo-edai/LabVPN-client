@@ -87,7 +87,7 @@
 
 | 文件 | 内容 | 来源 | 更新 |
 |---|---|---|---|
-| `fdu-domain.yaml` | `DOMAIN-SUFFIX,fudan.edu.cn` / `fducslg.com` / `fduhole.com` 等 | [fdu-netrules](https://github.com/AkiraSalvare/fdu-netrules) + 官方域名核对 | `npm run sync:rules` 同步 |
+| `fdu-domain.yaml` | `DOMAIN-SUFFIX,fudan.edu.cn` / `fducslg.com` / `fduhole.com` / `fudan.sh.cn` 等 | [fdu-netrules](https://github.com/AkiraSalvare/fdu-netrules) + 官方域名核对 | `npm run sync:rules` 同步 |
 | `fdu-ip.yaml` | `IP-CIDR,10.0.0.0/8` | fdu-netrules | 同上 |
 | `lan.yaml` | 私有/保留网段 | 内置 | 手工 |
 | `china-domain.yaml` | CN 域名（离线兜底） | ACL4SSR / meta-rules-dat | 同步脚本 |
@@ -95,6 +95,34 @@
 | `adblock.yaml` | 广告域名 | ACL4SSR BanAD | 同步脚本 |
 
 > mihomo 也支持 `GEOSITE,cn` / `GEOIP,CN`（依赖 geo 数据文件）；生成器优先使用内置离线 rule-provider（可用、可审计），geo 规则作为可选开关。
+>
+> 本地补充域名（上游未覆盖）在 `scripts/sync-rules.mjs` 的 `EXTRA_DOMAINS` 维护，目前为
+> `fdu.edu.cn`、`fudanpress.com`、`fudan.sh.cn`（`yjsxktest.fudan.sh.cn`，研究生选课/课表备用站）。
+
+## 6.1 校内 VPN 侧的路由（fdu-connect `proxy_all`）
+
+命中 `RULE-SET,FDUDomain` / `FDUIP` / 额外校内域名的流量统一交给 `🏫 校内 VPN`（fdu-connect SOCKS5）。
+fdu-connect 默认还会按 RVPN 自己的域名/网段规则决定“隧道 or 直连”；未被收录的目标（如旦挞解析到
+公网 CDN 的 `static.fduhole.com`）会被判为直连，随后又被 TUN 抓回并按校内 DNS 解析（离校不可达）→ 请求失败。
+
+因此生成的 `fdu-connect` 配置默认 `proxy_all = true`（「校内 VPN → 高级 → 校园 VPN 默认路由」可关闭）：
+交给校内 VPN 的流量全部由 RVPN 隧道承载。该开关只影响 fdu-connect 内部的二次分流，不改变 mihomo 规则顺序。
+
+## 6.2 旦挞（DanXi / Danta）访问的域名（核对记录）
+
+| 域名 | 用途 | 公网解析 | 分流结果 |
+|---|---|---|---|
+| `www` / `forum` / `api` / `auth` / `danke` / `image`.fduhole.com | 旦挞账号、茶楼、课评、图片 | 校内 DNS → `10.107.13.152`（内网） | `FDUDomain` → `🎓 校内` ✅ |
+| `static` / `danxi-static`.fduhole.com | 静态资源（Cloudflare Pages） | `172.66.x.x`（公网） | `FDUDomain` → `🎓 校内`，依赖 6.1 的默认路由 ✅ |
+| `danxi.fduhole.com` | 官网、条款 | GitHub Pages（公网） | `FDUDomain` → `🎓 校内` ✅ |
+| `webvpn.fudan.edu.cn` | 校外访问内网（旦挞“自动使用 WebVPN 代理”） | `175.186.248.x`（公网） | `FDUDomain` → `🎓 校内` ✅ |
+| `my` / `ehall` / `ecard` / `fdjwgl` / `zlapp` / `mlibrary` / `id` / `uis` / `fdtyjw` / `yzsfwapp`.fudan.edu.cn | 校园卡、教务、空教室、电费、校车、刷锻、成绩 | 内网 / 复旦公网段 | `FDUDomain` → `🎓 校内` ✅ |
+| `10.64.130.6` | 空教室查询（仅内网） | 内网 IP | `RULE-SET,FDUIP`（10/8）→ `🎓 校内` ✅ |
+| `yjsxktest.fudan.sh.cn` | 研究生选课/课表备用站 | 公网 NXDOMAIN（校内可见） | `FDUDomain`（新增 `fudan.sh.cn`）→ `🎓 校内` ✅ |
+
+> 结论：旦挞的“社区/校园”功能依赖复旦内网（`*.fduhole.com` 的 API 走 `10.107.13.152`），
+> 因此**必须**有校内 VPN 或 WebVPN；它并不需要“默认路由到校园 VPN”整体改道，
+> 只需要 6.1 的 `proxy_all` 让 RVPN 未收录的公网资源域也能走隧道。
 
 ## 7. DNS 设计（fake-ip）
 

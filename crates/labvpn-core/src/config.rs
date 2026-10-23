@@ -88,6 +88,21 @@ impl TrafficInfo {
 // 订阅
 // ---------------------------------------------------------------------------
 
+/// 订阅拉取方式（解决 IP 鉴权机场直连 403 问题）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SubscriptionFetchMode {
+    /// 自动：直连 → 本机 mihomo → 系统代理 → 自定义代理，依次回退
+    #[default]
+    Auto,
+    /// 仅直连
+    Direct,
+    /// 仅走系统代理
+    SystemProxy,
+    /// 仅走自定义代理
+    Custom,
+}
+
 /// 订阅配置（配置页 1）。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -110,6 +125,10 @@ pub struct SubscriptionConfig {
     pub traffic: Option<TrafficInfo>,
     /// 最近一次解析出的节点数（应用层维护，用于 UI 展示）
     pub proxy_count: Option<usize>,
+    /// 订阅拉取方式（自动/直连/系统代理/自定义）
+    pub fetch_mode: SubscriptionFetchMode,
+    /// 自定义拉取代理（如 http://127.0.0.1:7897；也可只填端口 7897）
+    pub fetch_proxy: Option<String>,
 }
 
 impl Default for SubscriptionConfig {
@@ -124,6 +143,8 @@ impl Default for SubscriptionConfig {
             last_updated: None,
             traffic: None,
             proxy_count: None,
+            fetch_mode: SubscriptionFetchMode::Auto,
+            fetch_proxy: None,
         }
     }
 }
@@ -276,6 +297,11 @@ pub struct CampusVpnConfig {
     pub campus_cidrs: Vec<String>,
     /// 强制走 RVPN 的额外域名（会同时写入 mihomo 校内规则）
     pub custom_proxy_domains: Vec<String>,
+    /// 校园 VPN 默认路由（fdu-connect `proxy_all`）：
+    /// 交给校内 VPN 的流量全部由 RVPN 隧道承载，不再由 RVPN 的域名/网段规则
+    /// 判断为“直连”。用于访问 RVPN 未收录、但同样需要校内出口的域名
+    /// （如旦挞 `static.fduhole.com` 这类解析到公网 CDN 的资源域）。
+    pub proxy_all: bool,
     /// 禁用复旦专用配置（透传 fdu-connect）
     pub disable_fdu_config: bool,
     /// 禁用复旦 DNS（透传 fdu-connect）
@@ -301,6 +327,7 @@ impl Default for CampusVpnConfig {
             probe_targets: default_probe_targets(),
             campus_cidrs: default_campus_cidrs(),
             custom_proxy_domains: Vec::new(),
+            proxy_all: true,
             disable_fdu_config: false,
             disable_fdu_dns: false,
         }
@@ -919,6 +946,23 @@ impl AppConfig {
                 "订阅地址必须是 http(s):// 或 file://",
             ));
         }
+        if sub.fetch_mode == SubscriptionFetchMode::Custom {
+            let proxy = sub.fetch_proxy.as_deref().map(str::trim).unwrap_or("");
+            if proxy.is_empty() {
+                issues.push(ValidationIssue::error(
+                    "subscription.fetchProxy",
+                    "订阅拉取方式为「自定义代理」时需要填写代理地址",
+                ));
+            } else if !proxy.starts_with("http://")
+                && !proxy.starts_with("https://")
+                && proxy.parse::<u16>().is_err()
+            {
+                issues.push(ValidationIssue::error(
+                    "subscription.fetchProxy",
+                    "代理地址需为 http(s)://host:port 或纯端口号",
+                ));
+            }
+        }
     }
 
     fn validate_campus(&self, issues: &mut Vec<ValidationIssue>) {
@@ -1235,6 +1279,23 @@ mod tests {
         let json = serde_json::to_value(&config).expect("serialize");
         let restored = AppConfig::migrate_json(json).expect("migrate");
         assert_eq!(config, restored);
+    }
+
+    #[test]
+    fn campus_vpn_proxy_all_default_and_override() {
+        // 默认开启校园 VPN 默认路由：RVPN 未收录的域名（如旦挞静态资源）也走隧道，
+        // 避免其被判定为直连后又被 TUN 抓回、最终校内 DNS 解析失败。
+        assert!(CampusVpnConfig::default().proxy_all);
+        // 旧配置缺少该字段时按默认值（开启）迁移。
+        let json = serde_json::json!({"version": 0, "campusVpn": {"username": "u"}});
+        let migrated = AppConfig::migrate_json(json).expect("migrate");
+        assert!(migrated.campus_vpn.proxy_all);
+        // 用户显式关闭时尊重配置。
+        let mut config = AppConfig::default();
+        config.campus_vpn.proxy_all = false;
+        let restored = AppConfig::migrate_json(serde_json::to_value(&config).expect("serialize"))
+            .expect("migrate");
+        assert!(!restored.campus_vpn.proxy_all);
     }
 
     #[test]

@@ -4,9 +4,10 @@ import { useNavigate } from "react-router-dom";
 
 import { ConfigTabs } from "@/components/features/ConfigTabs";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { Badge, Button, Card, CardHeader, Field, Progress, Row, Switch, TextInput } from "@/components/ui";
+import { Badge, Button, Card, CardHeader, Field, Progress, Row, Select, Switch, TextInput } from "@/components/ui";
 import { ROUTES } from "@/lib/constants";
 import { formatBytes, relativeTime, trafficUsage } from "@/lib/format";
+import type { SubscriptionFetchMode } from "@/lib/types";
 import { useAppStore } from "@/stores/app";
 
 export function SetupSubscription() {
@@ -24,6 +25,8 @@ export function SetupSubscription() {
   const [autoUpdate, setAutoUpdate] = useState(12);
   const [remoteProvider, setRemoteProvider] = useState(true);
   const [subEnabled, setSubEnabled] = useState(true);
+  const [fetchMode, setFetchMode] = useState<SubscriptionFetchMode>("auto");
+  const [fetchProxy, setFetchProxy] = useState("");
   const [usage, setUsage] = useState<ReturnType<typeof trafficUsage>>(null);
 
   useEffect(() => {
@@ -33,6 +36,8 @@ export function SetupSubscription() {
     setAutoUpdate(config.subscription.updateIntervalHours);
     setRemoteProvider(config.subscription.useRemoteProvider);
     setSubEnabled(config.subscription.enabled);
+    setFetchMode(config.subscription.fetchMode ?? "auto");
+    setFetchProxy(config.subscription.fetchProxy ?? "");
     setUsage(trafficUsage(config.subscription.traffic));
   }, [config]);
 
@@ -47,6 +52,8 @@ export function SetupSubscription() {
         name: name.trim() || config.subscription.name,
         updateIntervalHours: autoUpdate,
         useRemoteProvider: remoteProvider,
+        fetchMode,
+        fetchProxy: fetchProxy.trim() ? fetchProxy.trim() : null,
       },
     });
   };
@@ -102,6 +109,36 @@ export function SetupSubscription() {
               <div className="sm:col-span-2" />
             </div>
             <div className="hint">{t("setupSubscription.remoteProviderHint")}</div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <Field label={t("setupSubscription.fetchMode")} hint={t("setupSubscription.fetchModeHint")}>
+                <Select
+                  value={fetchMode}
+                  onChange={(event) => setFetchMode(event.target.value as SubscriptionFetchMode)}
+                  options={[
+                    { value: "auto", label: t("setupSubscription.fetchModeAuto") },
+                    { value: "direct", label: t("setupSubscription.fetchModeDirect") },
+                    { value: "systemProxy", label: t("setupSubscription.fetchModeSystem") },
+                    { value: "custom", label: t("setupSubscription.fetchModeCustom") },
+                  ]}
+                />
+              </Field>
+              {fetchMode === "custom" ? (
+                <Field
+                  label={t("setupSubscription.fetchProxy")}
+                  hint={t("setupSubscription.fetchProxyHint")}
+                  className="sm:col-span-2"
+                >
+                  <TextInput
+                    value={fetchProxy}
+                    onChange={(event) => setFetchProxy(event.target.value)}
+                    placeholder="http://127.0.0.1:7897 或 7897"
+                    className="font-mono text-[12px]"
+                  />
+                </Field>
+              ) : null}
+            </div>
+            <div className="hint">{t("setupSubscription.fetchIpAuthHint")}</div>
 
             <div className="flex flex-wrap gap-2 pt-1">
               <Button

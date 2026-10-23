@@ -138,7 +138,7 @@ fn derive_key() -> [u8; 32] {
 fn machine_id() -> String {
     #[cfg(target_os = "macos")]
     {
-        if let Ok(output) = std::process::Command::new("ioreg")
+        if let Ok(output) = crate::platform::hidden_command("ioreg")
             .args(["-rd1", "-c", "IOPlatformExpertDevice"])
             .output()
         {
@@ -164,7 +164,7 @@ fn machine_id() -> String {
     }
     #[cfg(windows)]
     {
-        if let Ok(output) = std::process::Command::new("reg")
+        if let Ok(output) = crate::platform::hidden_command("reg")
             .args([
                 "query",
                 r"HKLM\SOFTWARE\Microsoft\Cryptography",

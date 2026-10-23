@@ -32,6 +32,7 @@ interface DraftState {
   binaryPath: string;
   autoDetectCampus: boolean;
   skipWhenOnCampus: boolean;
+  proxyAll: boolean;
   extraDomains: string;
   probeTargets: ProbeTarget[];
   campusCidrs: string;
@@ -66,6 +67,7 @@ export function SetupCampusVpn() {
       binaryPath: config.campusVpn.binaryPath ?? "",
       autoDetectCampus: config.campusVpn.autoDetectCampus,
       skipWhenOnCampus: config.campusVpn.skipWhenOnCampus,
+      proxyAll: config.campusVpn.proxyAll,
       extraDomains: config.routing.extraCampusDomains.join("\n"),
       probeTargets: config.campusVpn.probeTargets,
       campusCidrs: config.campusVpn.campusCidrs.join("\n"),
@@ -94,6 +96,7 @@ export function SetupCampusVpn() {
           binaryPath: draft.binaryPath.trim() || null,
           autoDetectCampus: draft.autoDetectCampus,
           skipWhenOnCampus: draft.skipWhenOnCampus,
+          proxyAll: draft.proxyAll,
           probeTargets: draft.probeTargets.filter((target) => target.host.trim()),
           campusCidrs: draft.campusCidrs
             .split("\n")
@@ -388,6 +391,12 @@ export function SetupCampusVpn() {
                     checked={draft.skipWhenOnCampus}
                     onChange={(skipWhenOnCampus) => setDraft({ ...draft, skipWhenOnCampus })}
                     label="校内自动跳过 VPN"
+                  />
+                  <Switch
+                    checked={draft.proxyAll}
+                    onChange={(proxyAll) => setDraft({ ...draft, proxyAll })}
+                    label={t("setupCampus.proxyAll")}
+                    description={t("setupCampus.proxyAllHint")}
                   />
                 </div>
               </div>

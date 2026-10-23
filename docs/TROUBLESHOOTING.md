@@ -21,6 +21,22 @@
 4. 若在校园网却仍走 VPN：总览点「重新检测」，或把网络位置设为「自动」。
 5. 若内网仍不通，检查是否与其他 TUN（Clash/Shadowrocket）冲突：先退出它们的 TUN 模式。
 
+### 2.1 校内网站「时好时坏」/ 旦挞等 App 部分功能打不开
+
+典型症状（`core.log` 中可复现）：
+
+```
+[TCP] ... (Danta) --> static.fduhole.com:443 match RuleSet(FDUDomain) using 🎓 校内[🏫 校内 VPN]
+[TCP] dial DIRECT (match ProcessName/fdu-connect) ... --> static.fduhole.com:443
+      error: dns resolve failed: all DNS requests failed, first error: server failure: REFUSED
+```
+
+原因：这类域名解析到**公网 CDN**，fdu-connect 的 RVPN 规则判定为“直连”，该直连连接又被 TUN 抓回，
+mihomo 按 `nameserver-policy` 用校内 DNS（`202.120.224.26`）解析 → 离校不可达 → 请求反复失败。
+
+处理：保持「校内 VPN → 高级 → **校园 VPN 默认路由**」开启（默认已开）。开启后交给校内 VPN 的流量
+全部走 RVPN 隧道，不会再出现“VPN 内部二次直连”。若你手动关过它，重新打开并重连即可。
+
 ## 3. 校内 VPN 登录失败
 
 | 日志关键字 | 原因 | 处理 |
@@ -115,6 +131,27 @@
 4. **权限问题**：直接模式不需要 root；TUN 模式必须先安装特权 helper（设置页）。
 
 排查顺序：日志页看 `core` 源的最后几行 → 确认端口占用 → 关闭其他代理软件 → 重试。
+
+## 订阅导入报 HTTP 403 / AUTH_FAIL（IP 鉴权机场）
+
+现象：导入订阅提示 `HTTP 403`，响应体类似 `{"error":"AUTH_FAIL，IP鉴权失败，请先登陆"}`；
+同一链接在 Clash Verge 中正常。
+
+原因：机场对订阅来源 IP 做了白名单，LabVPN 默认直连拉取导致被拒。
+
+处理：在「并行配置 → 订阅 → 订阅拉取方式」选择：
+- **自定义代理**：填本机代理端口（如 Clash Verge 默认 `7897`，可只填端口），或
+- **系统代理**：若系统代理已开启（Clash Verge / Shadowrocket 等）。
+
+选择「自动」时会依次尝试 直连 → 本机 mihomo → 系统代理 → 自定义代理。
+
+通过代理拉取成功后，会自动改用本地缓存 provider，避免 mihomo 直连刷新再次 403。
+
+## file:// 本地订阅导入失败
+
+订阅地址支持标准 `file:///C:/Users/xxx/sub.yaml`（Windows）、`file://C:/...`、Unix
+`file:///home/xxx/sub.yaml` 以及 `file://localhost/...`；空格/中文可写成 `%20` 形式。
+若提示「路径不存在」，请确认路径与转义；格式错误会单独提示。
 
 ## 校园网置信度偏低
 

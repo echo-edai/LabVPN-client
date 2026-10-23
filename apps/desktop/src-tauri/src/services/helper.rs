@@ -215,7 +215,7 @@ pub fn elevate(args: &[String]) -> CmdResult<()> {
         let apple_script = format!(
             "do shell script \"{escaped}\" with prompt \"LabVPN 需要管理员权限来启用 TUN 模式\" with administrator privileges"
         );
-        let output = std::process::Command::new("osascript")
+        let output = crate::platform::hidden_command("osascript")
             .args(["-e", &apple_script])
             .output()
             .map_err(|err| CommandError::new("helper", format!("调用 osascript 失败: {err}")))?;
@@ -237,13 +237,13 @@ pub fn elevate(args: &[String]) -> CmdResult<()> {
         let output = if pkexec_available {
             let mut command_args = vec!["--disable-internal-agent".to_string()];
             command_args.extend(args.iter().cloned());
-            std::process::Command::new("pkexec")
+            crate::platform::hidden_command("pkexec")
                 .args(&command_args)
                 .output()
         } else {
             let mut command_args = args.to_vec();
             command_args.insert(0, "-n".to_string());
-            std::process::Command::new("sudo")
+            crate::platform::hidden_command("sudo")
                 .args(&command_args)
                 .output()
         }
@@ -277,7 +277,7 @@ pub fn elevate(args: &[String]) -> CmdResult<()> {
             program.replace('\'', "''"),
             command_line
         );
-        let output = std::process::Command::new("powershell")
+        let output = crate::platform::hidden_command("powershell")
             .args(["-NoProfile", "-NonInteractive", "-Command", &script])
             .output()
             .map_err(|err| CommandError::new("helper", format!("调用 PowerShell 失败: {err}")))?;

@@ -114,6 +114,17 @@
 结果结构：`CampusStatus { on_campus, confidence, signals[], checked_at, manual_override }`。
 状态机每 60s 或网络变更（接口 up/down、默认路由变化）时重检；`manual_override` 优先。
 
+### 4.5 校内 VPN 默认路由（fdu-connect `proxy_all`）
+
+fdu-connect 的 SOCKS 出口默认按“RVPN 域名/网段规则”决定走隧道还是直连：未被规则收录的目标
+（典型是解析到公网 CDN 的域名，如旦挞的 `static.fduhole.com`）会被它判为直连。该连接随后又被
+mihomo TUN 抓回，并按 `nameserver-policy` 用校内 DNS 解析（离校不可达），最终请求反复失败。
+
+因此 LabVPN 生成的 `config.toml` 默认写入 **`proxy_all = true`**（「校内 VPN → 高级 → 校园 VPN 默认路由」可关闭）：
+
+- 凡交给 `🏫 校内 VPN` 的流量一律由 RVPN 隧道承载，不再出现“VPN 内部再直连”的半程路由；
+- 与 mihomo 分流不冲突：进入 fdu-connect 的流量本来就只来自 `10/8`、复旦域名与“额外走校内的域名”规则。
+
 ## 5. 配置模型（`labvpn-core/src/config.rs`）
 
 ```rust
