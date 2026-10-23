@@ -104,7 +104,7 @@ LabVPN 把「Clash 订阅 + 复旦 RVPN + 公网 SSH 中转」整合进一个桌
 
 | 平台 | 安装包 | TUN | 备注 |
 |---|---|---|---|
-| macOS 12+ | `.dmg` | LaunchDaemon helper（一次授权） | Apple Silicon / Intel |
+| macOS 12+ | `.dmg` | LaunchDaemon helper（一次授权） | Apple Silicon / Intel；TUN 全流量但不在「系统设置 → VPN」显示（NE 需 Apple 证书，见 issue #7） |
 | Windows 10/11 | `.msi` / `.exe` | 每次启动 UAC 提权 | x64 |
 | Ubuntu 22.04+ | `.deb` / `.AppImage` | systemd helper | 需 `webkit2gtk-4.1` |
 | AlmaLinux 9+ | `.rpm` | systemd helper | 需 `webkit2gtk-4.1`（AppStream） |

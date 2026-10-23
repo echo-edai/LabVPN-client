@@ -132,6 +132,18 @@ mihomo 按 `nameserver-policy` 用校内 DNS（`202.120.224.26`）解析 → 离
 
 排查顺序：日志页看 `core` 源的最后几行 → 确认端口占用 → 关闭其他代理软件 → 重试。
 
+## 为什么 macOS「系统设置 → VPN」里没有 LabVPN？
+
+- 能在系统设置 VPN 列表里出现的应用（如 Shadowrocket、ClashX Pro）使用的是
+  **Network Extension（`NEPacketTunnelProvider`）**，由 Apple 授权 entitlement 并签名；
+- LabVPN 使用**特权 helper 启动 mihomo TUN（utun）**实现全流量接管：功能上等同于 VPN，
+  但 macOS 不会把这种 utun 显示为「VPN」服务（Clash Verge 等同类方案也一样）；
+- macOS 没有公开的 CLI/plist 可以直接创建 VPN 服务：`networksetup` 只能创建 PPPoE/VLAN/bond，
+  `scutil --nc` 只能管理已存在的 NE VPN 配置，不能创建。
+
+如需在系统设置中出现 LabVPN，必须引入 Network Extension，属于 v0.3.0 计划（见 GitHub issue #7），
+前置条件是 Apple Developer Program 与 Network Extension entitlement。
+
 ## 订阅导入报 HTTP 403 / AUTH_FAIL（IP 鉴权机场）
 
 现象：导入订阅提示 `HTTP 403`，响应体类似 `{"error":"AUTH_FAIL，IP鉴权失败，请先登陆"}`；

@@ -267,3 +267,17 @@ AppConfig {
 - 数据仅写本机 `stats/*.jsonl`（按天滚动，保留天数可配置），命令 `get_analytics` / `get_ai_exposure`
   负责聚合返回给「网络看板」。
 - 不含任何远端上报；AI 平台 IP 记录代表「该平台连接发生时实际暴露的出口 IP」。
+
+## macOS Network Extension（规划 v0.3.0）
+
+目标：在「系统设置 → VPN」中显示并控制 LabVPN（对齐 Shadowrocket 体验）。
+
+- **为什么必须 NE**：系统 VPN 列表只接受 `NEPacketTunnelProvider` 扩展；utun（helper 模式）不会显示。
+  macOS 无公开 CLI/plist 可创建 VPN 服务（`networksetup` 无 VPN 类型，`scutil --nc` 只能管理已有配置）。
+- **前置**：Apple Developer Program、`com.apple.developer.networking.networkextension`
+  （packet-tunnel-provider）entitlement、Developer ID 签名 + 公证（如做 System Extension 还需 system-extension 权限）。
+- **方案 A（轻量）**：主 App 用 `NETunnelProviderManager` 创建配置；扩展只做开关/状态同步，
+  实际分流仍由 helper 的 mihomo TUN 完成（PoC 快，需处理双 utun 路由与 entitlement 审核风险）。
+- **方案 B（完整）**：扩展内 `NEPacketTunnelProvider` 接管 packetFlow，转发给 mihomo / 内置代理核心
+  （合规性最好，需重构 App ↔ NE ↔ 核心 IPC，预计 1–3 周）。
+- **跟踪**：GitHub issue #7 / milestone v0.3.0。

@@ -55,7 +55,14 @@
   sidecar 也统一 ad-hoc 签名，并在构建后执行 `codesign --verify --deep --strict` 校验。
 - v0.1.8 仍需用户右键打开/在隐私设置允许（非 Apple 公证）。
 
-### 4. 可选：正式签名 / 公证
+### 4. 待实现：macOS Network Extension（系统设置 → VPN 显示 LabVPN）
+- 需求：像 Shadowrocket 一样在「系统设置 → VPN」出现并可被系统开关控制。
+- 技术结论：必须用 `NEPacketTunnelProvider`；`networksetup`/`scutil --nc` 都无法创建 VPN 服务。
+- 阻塞：Apple Developer Program（$99/年）+ Network Extension entitlement + Developer ID 签名/公证。
+- 跟踪：GitHub issue #7，milestone v0.3.0；方案（轻量控制面 / 完整 tunnel）见 `docs/ARCHITECTURE.md`。
+- 需维护者确认：是否购买/已拥有 Apple Developer Program 账号。
+
+### 5. 可选：正式签名 / 公证
 - 购买 Apple Developer Program（Developer ID）后配置 GitHub Secrets：`APPLE_SIGNING_IDENTITY`、`APPLE_CERTIFICATE`、`APPLE_CERTIFICATE_PASSWORD`、`APPLE_ID`、`APPLE_PASSWORD`、`APPLE_TEAM_ID`、`KEYCHAIN_PASSWORD`；Windows 证书同理。
 - 配置后重新打 tag 触发 Release，即可实现「下载即安装」。
 
