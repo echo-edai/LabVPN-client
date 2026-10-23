@@ -162,6 +162,9 @@ jobs:
             跨平台自动分流客户端：复旦校内 VPN + 机场订阅 + 公网 SSH 一体化。
 
             ### 本版更新
+            - **校内 VPN 稳定性**：内置本地补丁版 fdu-connect（可取消握手 + SOCKS5 宽限重试 + 更积极的 SYN 重传），
+              修复连接部分内网主机偶发 `context deadline exceeded` / 断连的问题；修改后完整源码随仓库
+              `vendor/fdu-connect/` 提供（AGPL-3.0）
             - **内置 fdu-connect**：无需单独安装校内 VPN 连接器
             - 凭据仅本机加密保存，含密码的临时配置在启动后立即销毁，绝不上传云端
             - 校内外自动检测：校内直连、校外自动 VPN + 分流
@@ -202,6 +205,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          curl -fsSL -o "fdu-connect-source-a904877.zip" \
-            "https://github.com/AkiraSalvare/fdu-connect/archive/a904877f0eda0c7b1d7933ad6e80d5e8d3ffd584.zip"
-          gh release upload "${{ github.ref_name }}" "fdu-connect-source-a904877.zip" --clobber
+          # 打包的 fdu-connect 是「上游 a904877 + vendor/fdu-connect/robust-socks.patch」的
+          # 修改版，因此这里附带**修改后的完整源码**（AGPL-3.0 §6 Corresponding Source）。
+          ARCHIVE="fdu-connect-source-a904877-robust-socks.tar.gz"
+          tar -czf "$ARCHIVE" -C vendor fdu-connect
+          gh release upload "${{ github.ref_name }}" "$ARCHIVE" --clobber
