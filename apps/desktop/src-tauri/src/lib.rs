@@ -108,6 +108,8 @@ pub fn run() {
             commands::system::get_logs,
             commands::system::clear_logs,
             commands::system::open_path,
+            commands::update::check_update,
+            commands::update::skip_update_version,
             commands::system::export_diagnostics,
             commands::system::sync_subscription,
             commands::system::detect_campus_now,

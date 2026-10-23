@@ -10,6 +10,7 @@
 //! - [`ipc`]：特权 helper 通信协议（App 与 helper 共用）
 //! - [`subscription`]：Clash 订阅内容解析、格式识别、流量信息
 //! - [`probe`]：校园网多信号探测（含按网卡绑定以绕过第三方 TUN）
+//! - [`update`]：版本号解析/比较与 GitHub Release 挑选（纯逻辑）
 //! - [`util`]：通用工具（脱敏、哈希、IP/CIDR 解析等）
 
 #![cfg_attr(not(test), deny(clippy::unwrap_used))]
@@ -22,6 +23,7 @@ pub mod ipc;
 pub mod probe;
 pub mod rules;
 pub mod subscription;
+pub mod update;
 pub mod util;
 
 pub use config::AppConfig;

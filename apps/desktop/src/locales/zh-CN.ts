@@ -361,6 +361,29 @@ export const zhCN = {
   "settings.github": "项目主页",
   "settings.helperVersion": "特权服务版本",
   "settings.uptime": "应用运行时长",
+  "settings.latestVersion": "最新版本",
+
+  // 更新
+  "update.tip": "发现新版本，点击查看",
+  "update.check": "检查更新",
+  "update.checkFailed": "检查更新失败",
+  "update.download": "前往下载",
+  "update.dialogTitle": "发现新版本 v{version}",
+  "update.dialogBody":
+    "当前版本 v{current}，最新版本 v{latest}。可前往 GitHub Release 下载对应平台安装包，安装后配置与订阅会保留。",
+  "update.publishedAt": "发布于 {date}",
+  "update.prerelease": "预发布",
+  "update.skip": "忽略此版本",
+  "update.later": "稍后提醒",
+  "update.notChecked": "未检查",
+  "update.upToDate": "已是最新",
+  "update.autoCheck": "启动时自动检查更新",
+  "update.autoCheckHint": "仅比对 GitHub Release 版本号，不上传任何本地信息",
+  "update.skippedToast": "已忽略 v{version} 的更新提示",
+  "update.resumedToast": "已恢复更新提示",
+  "update.resume": "恢复 v{version} 的提示",
+  "update.releasePage": "在 GitHub 查看完整发布说明",
+  "update.openFailed": "打开下载页面失败",
 
   // Toast
   "toast.saved": "配置已保存",

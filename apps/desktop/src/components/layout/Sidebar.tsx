@@ -1,5 +1,6 @@
 import {
   GraduationCap,
+  ArrowDownToLine,
   BarChart3,
   LayoutDashboard,
   Route,
@@ -13,7 +14,7 @@ import { NavLink, useLocation } from "react-router-dom";
 
 import { Logo } from "@/components/layout/Logo";
 import { StatusDot } from "@/components/ui";
-import { APP_VERSION, ROUTES } from "@/lib/constants";
+import { ROUTES } from "@/lib/constants";
 import { cn } from "@/lib/cn";
 import { useAppStore } from "@/stores/app";
 
@@ -27,8 +28,15 @@ export function Sidebar() {
   const t = useAppStore((state) => state.t);
   const engine = useAppStore((state) => state.engine);
   const config = useAppStore((state) => state.config);
+  const system = useAppStore((state) => state.system);
+  const update = useAppStore((state) => state.update);
+  const openUpdateDialog = useAppStore((state) => state.openUpdateDialog);
   const location = useLocation();
   const ready = config?.ui.setupCompleted ?? false;
+  const skippedVersion = config?.update?.skippedVersion ?? null;
+  const hasUpdate = Boolean(
+    update?.hasUpdate && update.latest !== skippedVersion,
+  );
 
   const NavItem = ({
     to,
@@ -91,9 +99,24 @@ export function Sidebar() {
           </span>
           <ShieldCheck size={13} className={engine?.running ? "ml-auto text-[var(--ok)]" : "ml-auto text-ink-muted"} />
         </div>
-        <div className="mt-1.5 flex items-center justify-between text-[10.5px] text-ink-muted">
-          <span>{engine?.mode === "tun" ? t("mode.tun") : engine?.running ? t("mode.systemProxy") : t("status.idle")}</span>
-          <span>v{APP_VERSION}</span>
+        <div className="mt-1.5 flex items-center justify-between gap-2 text-[10.5px] text-ink-muted">
+          <span className="truncate">
+            {engine?.mode === "tun" ? t("mode.tun") : engine?.running ? t("mode.systemProxy") : t("status.idle")}
+          </span>
+          <span className="flex shrink-0 items-center gap-1.5">
+            {hasUpdate && update ? (
+              <button
+                type="button"
+                onClick={openUpdateDialog}
+                title={t("update.tip")}
+                className="flex items-center gap-0.5 rounded-full bg-[var(--warn)]/15 px-1.5 py-0.5 text-[9.5px] font-medium text-[var(--warn)] transition hover:bg-[var(--warn)]/25"
+              >
+                <ArrowDownToLine size={9} />
+                {update.latest}
+              </button>
+            ) : null}
+            <span className="font-mono">v{system?.appVersion ?? "—"}</span>
+          </span>
         </div>
       </div>
     </aside>

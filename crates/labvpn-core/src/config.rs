@@ -777,6 +777,29 @@ impl Default for UiConfig {
 }
 
 // ---------------------------------------------------------------------------
+// 更新检查
+// ---------------------------------------------------------------------------
+
+/// 应用更新检查配置。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct UpdateConfig {
+    /// 启动时自动检查更新
+    pub auto_check: bool,
+    /// 用户选择「忽略此版本」的版本号（如 `0.1.12`）
+    pub skipped_version: Option<String>,
+}
+
+impl Default for UpdateConfig {
+    fn default() -> Self {
+        Self {
+            auto_check: true,
+            skipped_version: None,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // 根配置
 // ---------------------------------------------------------------------------
 
@@ -802,6 +825,8 @@ pub struct AppConfig {
     pub engine: EngineConfig,
     /// 界面
     pub ui: UiConfig,
+    /// 更新检查
+    pub update: UpdateConfig,
 }
 
 impl Default for AppConfig {
@@ -816,6 +841,7 @@ impl Default for AppConfig {
             routing: RoutingConfig::default(),
             engine: EngineConfig::default(),
             ui: UiConfig::default(),
+            update: UpdateConfig::default(),
         }
     }
 }
@@ -1279,6 +1305,27 @@ mod tests {
         let json = serde_json::to_value(&config).expect("serialize");
         let restored = AppConfig::migrate_json(json).expect("migrate");
         assert_eq!(config, restored);
+    }
+
+    #[test]
+    fn update_config_defaults_and_skip_version() {
+        let config = AppConfig::default();
+        assert!(config.update.auto_check, "默认应在启动时检查更新");
+        assert!(config.update.skipped_version.is_none());
+
+        // 旧配置缺少 update 段时按默认值迁移（自动检查开启）。
+        let migrated = AppConfig::migrate_json(serde_json::json!({"version": 0})).expect("migrate");
+        assert!(migrated.update.auto_check);
+        assert!(migrated.update.skipped_version.is_none());
+
+        // 显式关闭 / 忽略某版本应能往返序列化。
+        let mut config = AppConfig::default();
+        config.update.auto_check = false;
+        config.update.skipped_version = Some("0.1.12".into());
+        let restored = AppConfig::migrate_json(serde_json::to_value(&config).expect("serialize"))
+            .expect("migrate");
+        assert!(!restored.update.auto_check);
+        assert_eq!(restored.update.skipped_version.as_deref(), Some("0.1.12"));
     }
 
     #[test]

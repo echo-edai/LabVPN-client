@@ -32,6 +32,7 @@ import type {
   VpnStatus,
   VpnTestResult,
   ConnectOutcome,
+  UpdateInfo,
   ValidationIssue,
 } from "@/lib/types";
 
@@ -155,6 +156,10 @@ function defaultConfig(): AppConfig {
       setupCompleted: true,
       setupStep: 3,
       trafficGraph: true,
+    },
+    update: {
+      autoCheck: true,
+      skippedVersion: null,
     },
   };
 }
@@ -553,6 +558,23 @@ function mockAnalytics(range: string): AnalyticsData {
 export async function mockInvoke(cmd: string, args?: Record<string, unknown>): Promise<unknown> {
   await delay(120 + Math.random() * 180);
   switch (cmd) {
+    case "check_update": {
+      // 浏览器预览：固定返回一个可更新版本，便于走查更新弹窗与设置页。
+      return {
+        current: "0.1.11",
+        latest: "0.1.12",
+        hasUpdate: true,
+        releaseUrl: "https://github.com/echo-edai/LabVPN-client/releases/tag/v0.1.12",
+        releaseName: "LabVPN v0.1.12（预览 Mock）",
+        notes: "## 浏览器预览 Mock\n\n- 应用内更新检查示例：发现新版本后由用户决定是否更新\n- 支持忽略此版本",
+        publishedAt: now(),
+        prerelease: true,
+      } satisfies UpdateInfo;
+    }
+    case "skip_update_version": {
+      config.update.skippedVersion = String(args?.version ?? "");
+      return envelope();
+    }
     case "get_snapshot":
       return snapshot();
     case "get_config":

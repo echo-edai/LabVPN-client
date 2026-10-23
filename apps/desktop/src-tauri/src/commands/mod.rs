@@ -5,4 +5,5 @@ pub mod config;
 pub mod connect;
 pub mod subscription;
 pub mod system;
+pub mod update;
 pub mod vpn;

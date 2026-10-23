@@ -1,5 +1,6 @@
 import {
   Activity,
+  ArrowDownToLine,
   FileDown,
   BadgeInfo,
   CloudDownload,
@@ -56,6 +57,10 @@ export function Settings() {
   const refreshSubscription = useAppStore((state) => state.refreshSubscription);
   const exportDiagnostics = useAppStore((state) => state.exportDiagnostics);
   const openPath = useAppStore((state) => state.openPath);
+  const update = useAppStore((state) => state.update);
+  const updateChecking = useAppStore((state) => state.updateChecking);
+  const checkUpdate = useAppStore((state) => state.checkUpdate);
+  const skipUpdate = useAppStore((state) => state.skipUpdate);
   const resetConfig = useAppStore((state) => state.resetConfig);
   const pushToast = useAppStore((state) => state.pushToast);
   const configRef = useRef<AppConfig | null>(null);
@@ -441,8 +446,54 @@ export function Settings() {
           <CardHeader title={t("settings.about")} icon={<BadgeInfo size={15} />} />
           <Row label={t("settings.version")} value={`v${system?.appVersion ?? "0.1.0"}`} />
           <Row label={t("settings.coreVersion")} value={core?.version ?? t("common.unknown")} />
+          <Row
+            label={t("settings.latestVersion")}
+            value={
+              update
+                ? `v${update.latest}${update.hasUpdate ? "" : `（${t("update.upToDate")}）`}`
+                : t("update.notChecked")
+            }
+          />
           <Row label={t("settings.uptime")} value={formatDuration(system?.appUptimeSecs ?? 0)} />
           <Row label={t("settings.license")} value="MIT（见 NOTICE）" />
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              icon={<RefreshCw size={12} />}
+              loading={updateChecking}
+              onClick={() => void checkUpdate(true)}
+            >
+              {t("update.check")}
+            </Button>
+            {update?.hasUpdate ? (
+              <Button
+                size="sm"
+                variant="primary"
+                icon={<ArrowDownToLine size={12} />}
+                onClick={() => void openPath(update.releaseUrl)}
+              >
+                {t("update.download")}
+              </Button>
+            ) : null}
+            {config?.update.skippedVersion ? (
+              <Button size="sm" variant="ghost" onClick={() => void skipUpdate("")}>
+                {t("update.resume", { version: config.update.skippedVersion })}
+              </Button>
+            ) : null}
+          </div>
+          {draft ? (
+            <div className="mt-3">
+              <Switch
+                checked={draft.update.autoCheck}
+                onChange={(autoCheck) =>
+                  patch((current) => ({ ...current, update: { ...current.update, autoCheck } }))
+                }
+                label={t("update.autoCheck")}
+                description={t("update.autoCheckHint")}
+              />
+            </div>
+          ) : null}
           <div className="mt-3 flex items-start gap-2 rounded-lg border border-line bg-card px-2.5 py-2 text-[10.5px] text-ink-muted">
             <Info size={12} className="mt-0.5 shrink-0" />
             <span>

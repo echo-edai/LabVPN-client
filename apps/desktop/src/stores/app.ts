@@ -29,6 +29,7 @@ import type {
   SystemInfo,
   ThemeMode,
   TrafficPoint,
+  UpdateInfo,
   VpnStatus,
   VpnTestResult,
 } from "@/lib/types";
@@ -85,10 +86,17 @@ export interface AppStore {
   language: Language;
   toasts: ToastItem[];
   preview: PreviewResult | null;
+  update: UpdateInfo | null;
+  updateChecking: boolean;
+  updateDialogOpen: boolean;
 
   init: () => Promise<void>;
   t: (key: MessageKey, vars?: Record<string, string | number>) => string;
   refresh: () => Promise<void>;
+  checkUpdate: (force?: boolean) => Promise<UpdateInfo | null>;
+  skipUpdate: (version: string) => Promise<void>;
+  openUpdateDialog: () => void;
+  closeUpdateDialog: () => void;
   loadProxyGroups: () => Promise<void>;
   saveConfig: (config: AppConfig, secrets?: SecretUpdates) => Promise<boolean>;
   applyConfig: () => Promise<boolean>;
@@ -167,6 +175,9 @@ export const useAppStore = create<AppStore>()((set, get) => ({
   language: "zh-CN",
   toasts: [],
   preview: null,
+  update: null,
+  updateChecking: false,
+  updateDialogOpen: false,
 
   init: async () => {
     if (initialized) return;
@@ -242,6 +253,12 @@ export const useAppStore = create<AppStore>()((set, get) => ({
       if (snapshot.engine.running) {
         void get().loadProxyGroups();
       }
+      // 启动后静默检查更新（不打扰用户；失败只在手动检查时提示）。
+      if (snapshot.config.config.update.autoCheck) {
+        setTimeout(() => {
+          void get().checkUpdate(false);
+        }, 3000);
+      }
     } catch (error) {
       set({ loading: false, ready: true });
       get().pushToast("error", "初始化失败", messageOf(error));
@@ -279,6 +296,41 @@ export const useAppStore = create<AppStore>()((set, get) => ({
       set({ proxyGroups: [] });
     }
   },
+
+  checkUpdate: async (force = true) => {
+    set({ updateChecking: true });
+    try {
+      const info = await api.checkUpdate();
+      const skipped = get().config?.update?.skippedVersion ?? null;
+      set({ updateChecking: false, update: info });
+      if (force && info.hasUpdate && info.latest !== skipped) {
+        set({ updateDialogOpen: true });
+      }
+      return info;
+    } catch (error) {
+      set({ updateChecking: false });
+      if (force) {
+        get().pushToast("error", get().t("update.checkFailed"), messageOf(error));
+      }
+      return null;
+    }
+  },
+
+  skipUpdate: async (version) => {
+    try {
+      const envelope = await api.skipUpdateVersion(version);
+      set({ envelope, config: envelope.config, updateDialogOpen: false });
+      get().pushToast(
+        "info",
+        version ? get().t("update.skippedToast", { version }) : get().t("update.resumedToast"),
+      );
+    } catch (error) {
+      get().pushToast("error", get().t("update.checkFailed"), messageOf(error));
+    }
+  },
+
+  openUpdateDialog: () => set({ updateDialogOpen: true }),
+  closeUpdateDialog: () => set({ updateDialogOpen: false }),
 
   saveConfig: async (config, secrets = {}) => {
     set({ busy: "save" });

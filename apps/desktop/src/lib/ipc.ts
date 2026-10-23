@@ -27,6 +27,7 @@ import type {
   SshTestResult,
   SubscriptionInfo,
   SystemInfo,
+  UpdateInfo,
   ValidationIssue,
   VpnStatus,
   VpnTestResult,
@@ -142,6 +143,11 @@ export const api = {
   clearLogs: () => call<OperationResult>("clear_logs"),
   openPath: (target: string) => call<OperationResult>("open_path", { target }),
   exportDiagnostics: () => call<OperationResult>("export_diagnostics"),
+
+  // 更新
+  checkUpdate: () => call<UpdateInfo>("check_update"),
+  skipUpdateVersion: (version: string) =>
+    call<ConfigEnvelope>("skip_update_version", { version }),
 };
 
 /** 订阅事件（浏览器预览下为空实现）。 */

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { UpdateDialog } from "@/components/features/UpdateDialog";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { ToastHost } from "@/components/ui";
 
@@ -13,6 +14,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </main>
       <ToastHost />
+      <UpdateDialog />
     </div>
   );
 }

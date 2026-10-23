@@ -223,6 +223,25 @@ export interface UiConfig {
   trafficGraph: boolean;
 }
 
+export interface UpdateConfig {
+  /** 启动时自动检查更新 */
+  autoCheck: boolean;
+  /** 用户选择「忽略此版本」的版本号 */
+  skippedVersion: string | null;
+}
+
+/** 一次更新检查的结果。 */
+export interface UpdateInfo {
+  current: string;
+  latest: string;
+  hasUpdate: boolean;
+  releaseUrl: string;
+  releaseName: string | null;
+  notes: string | null;
+  publishedAt: string | null;
+  prerelease: boolean;
+}
+
 export interface AppConfig {
   version: number;
   subscription: SubscriptionConfig;
@@ -233,6 +252,7 @@ export interface AppConfig {
   routing: RoutingConfig;
   engine: EngineConfig;
   ui: UiConfig;
+  update: UpdateConfig;
 }
 
 export interface ValidationIssue {
