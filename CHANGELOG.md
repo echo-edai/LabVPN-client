@@ -2,7 +2,7 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [Unreleased]
+## [0.1.10] — 预发布（当前）
 
 ### Added
 - **校园 VPN 默认路由（`proxyAll`）**：生成的 `fdu-connect` 配置新增 `proxy_all = true`，
@@ -15,8 +15,20 @@
 
 ### Fixed
 - 校内服务在「RVPN 视为直连」的目标上失败的问题（表现为校内网/旦挞部分功能打不开）。
+- **校园 VPN 偶发 `context deadline exceeded`（部分内网主机偶发断连）**：
+  原因有两层 —— (1) 目标/路径短时丢包时，RVPN 用户态栈的 TCP 握手会退避重传，
+  `gonet.DialTCP` 没有超时也不能取消（黑洞目标实测 >120s 不返回）；
+  (2) mihomo 对 SOCKS5 拨号只等 5s，把「慢但能成功」的连接直接判死，
+  并在 fdu-connect 侧留下 CLOSE_WAIT 半开连接与泄漏 goroutine。
+  解决：**本地补丁版 fdu-connect**（[`vendor/fdu-connect/PATCH.md`](vendor/fdu-connect/PATCH.md)）
+  - 握手改用可取消的 `gonet.DialContextTCP`，客户端断开即中止、不再泄漏；
+  - SOCKS5 宽限应答：2s 内握手完成则完全保持严格 SOCKS5 语义，超过则先应答成功，
+    后续 `Read/Write` 阻塞等待；单次握手 4s，超时后用**新连接**（新源端口/新 NAT 表项）
+    重试，直到 20s 总预算（`socks_connect_timeout` / `socks_early_reply_ms`）。
+  - gVisor `TCPMinRTO` 从 1s 下调到 500ms，让短暂丢包窗口内的 SYN 重试次数足够多。
+  修改后完整源码随仓库提供（AGPL-3.0），安装包内二进制由 `scripts/fetch-sidecars.mjs` 编译。
 
-## [0.1.9] — 预发布（当前）
+## [0.1.9] — 预发布
 
 ### Fixed（GitHub issues #4 / #5 / #6）
 - **Windows 控制台黑框闪烁/抢焦点（#4）**：所有子进程统一通过 `hidden_command` 创建，

@@ -15,8 +15,9 @@
  *   binaries/wintun.dll             Windows TUN 依赖
  *
  * 安全/合规要点：
- * - fdu-connect 以独立进程使用、未修改源码；许可证与 NOTICE 已随 App 打包；
- *   本脚本记录构建 commit，Release 工作流会上传对应源码归档。
+ * - fdu-connect 以独立进程使用；**源码经本地补丁修改**（见 vendor/fdu-connect/PATCH.md），
+ *   完整修改后源码随仓库提供（AGPL-3.0），许可证与 NOTICE 随 App 打包；
+ *   本脚本优先用 vendor/ 下的源码编译，并记录基线 commit 与补丁信息。
  * - 脚本不写入任何用户凭据。
  */
 import { createHash } from "node:crypto";
@@ -37,6 +38,9 @@ const RELEASE_BASE = `https://github.com/MetaCubeX/mihomo/releases/download/${MI
 /** fdu-connect 构建基准（AGPL-3.0） */
 const FDU_REPO = "AkiraSalvare/fdu-connect";
 const FDU_COMMIT = "a904877f0eda0c7b1d7933ad6e80d5e8d3ffd584";
+/** 本地补丁版源码（优先编译；见 vendor/fdu-connect/PATCH.md） */
+const FDU_VENDOR_DIR = join(ROOT, "vendor", "fdu-connect");
+const FDU_PATCH = "robust-socks.patch";
 
 const args = process.argv.slice(2);
 const force = args.includes("--force");
@@ -265,7 +269,30 @@ function findInstalledFduConnect() {
   return null;
 }
 
-/** 从固定 commit 编译 fdu-connect（需要 Go 工具链）。 */
+/** 编译 vendor/ 下的本地补丁版 fdu-connect（首选；需要 Go 1.24/1.25）。 */
+function buildFduConnectFromVendor() {
+  const vendorSource = join(FDU_VENDOR_DIR, "main.go");
+  if (!existsSync(vendorSource)) {
+    return null;
+  }
+  if (!commandExists("go")) {
+    log("未找到 Go 工具链，跳过 vendor 版 fdu-connect 编译");
+    return null;
+  }
+  const output = join(tmpdir(), isWindows ? "fdu-connect-vendor.exe" : "fdu-connect-vendor");
+  log(`编译本地补丁版 fdu-connect（基线 ${FDU_COMMIT.slice(0, 12)} + ${FDU_PATCH}）…`);
+  try {
+    exec("go", ["build", "-trimpath", "-ldflags", "-s -w", "-o", output, "."], {
+      cwd: FDU_VENDOR_DIR,
+    });
+    return output;
+  } catch (error) {
+    log(`编译 vendor 版失败：${error && error.message ? error.message : error}`);
+    return null;
+  }
+}
+
+/** 从固定 commit 编译上游 fdu-connect（无 Go/patch 源码时的兜底）。 */
 function buildFduConnectFromSource() {
   if (!commandExists("go")) {
     return null;
@@ -298,9 +325,15 @@ async function fetchFduConnect() {
     log("fdu-connect 已就绪，跳过（--force 可重新准备）");
     return;
   }
+  const patched = buildFduConnectFromVendor();
+  if (patched) {
+    installSidecar("fdu-connect", patched);
+    log(`✅ 已编译本地补丁版 fdu-connect（${FDU_PATCH}）`);
+    return;
+  }
   const installed = findInstalledFduConnect();
   if (installed) {
-    log(`使用本机已有 fdu-connect：${installed}`);
+    log(`⚠️ 使用本机已有 fdu-connect（可能不含补丁）：${installed}`);
     installSidecar("fdu-connect", installed);
     return;
   }
@@ -334,6 +367,9 @@ function writeManifest() {
       repo: FDU_REPO,
       commit: FDU_COMMIT,
       license: "AGPL-3.0",
+      patched: true,
+      patch: FDU_PATCH,
+      patchDescription: "cancelable gVisor handshake + SOCKS5 graceful reply, see vendor/fdu-connect/PATCH.md",
     },
     platform: process.platform,
     arch: process.arch,

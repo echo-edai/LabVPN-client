@@ -1,0 +1,14 @@
+version: '3'
+
+services:
+  fdu-connect:
+    build:
+      context: .
+    image: fdu-connect
+    container_name: fdu-connect
+    restart: unless-stopped
+    ports:
+      - 1080:1080
+      - 1081:1081
+    volumes:
+      - ./config.toml:/home/nonroot/config.toml

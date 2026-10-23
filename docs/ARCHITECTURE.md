@@ -125,6 +125,21 @@ mihomo TUN 抓回，并按 `nameserver-policy` 用校内 DNS 解析（离校不�
 - 凡交给 `🏫 校内 VPN` 的流量一律由 RVPN 隧道承载，不再出现“VPN 内部再直连”的半程路由；
 - 与 mihomo 分流不冲突：进入 fdu-connect 的流量本来就只来自 `10/8`、复旦域名与“额外走校内的域名”规则。
 
+### 4.6 慢握手宽限（`robust-socks` 补丁）
+
+RVPN 的 TCP 握手在 fdu-connect 的用户态 gVisor 栈中完成，路径短时丢包时 `gonet.DialTCP`
+会退避重传且**没有超时、不可取消**；而 mihomo 对 SOCKS5 拨号只等 5s，于是「慢但能成功」的
+连接被记为 `context deadline exceeded`，并在 fdu-connect 侧留下半开连接与泄漏 goroutine。
+
+捆绑的 fdu-connect（源码见 [`vendor/fdu-connect/`](../vendor/fdu-connect/PATCH.md)）修复：
+
+1. `stack.Stack.DialTCPContext` + `gonet.DialContextTCP`：握手可被上下文取消；
+2. SOCKS5 宽限应答 + 分段重试：2s（`socks_early_reply_ms`）内完成的连接保持严格 SOCKS5；
+   超过则先回成功，每 4s 一次握手、失败即换新连接（新源端口/新 NAT 表项）重试，总预算
+   20s（`socks_connect_timeout`），期间 `Read/Write` 阻塞等待；gVisor 的 `TCPMinRTO`
+   同时从 1s 降到 500ms；
+3. 这两个值由 `services/vpn.rs` 写入生成的 `config.toml`。
+
 ## 5. 配置模型（`labvpn-core/src/config.rs`）
 
 ```rust

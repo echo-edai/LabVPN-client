@@ -35,6 +35,12 @@ fn fdu_command(binary: &Path) -> Command {
     command
 }
 
+/// 打补丁版 fdu-connect 的 SOCKS5 建连宽限（见 vendor/fdu-connect/PATCH.md）。
+/// 隧道握手在用户态栈里完成，偶发丢包/短暂卡顿会明显超过 mihomo 的 5s 拨号超时；
+/// 补丁版先应答 SOCKS5 客户端（2s），再在该预算内用「新连接重试」继续握手。
+const SOCKS_CONNECT_TIMEOUT_SECS: u16 = 20;
+const SOCKS_EARLY_REPLY_MS: u16 = 2000;
+
 /// 就绪判定关键字
 const READY_MARKERS: &[&str] = &[
     "SOCKS5 server listening on",
@@ -718,6 +724,9 @@ disable_fdu_config = {disable_fdu_config}
 disable_fdu_dns = {disable_fdu_dns}
 disable_multi_line = false
 proxy_all = {proxy_all}
+# LabVPN 补丁：可取消握手 + SOCKS5 宽限应答（见 vendor/fdu-connect/PATCH.md）
+socks_connect_timeout = {socks_connect_timeout}
+socks_early_reply_ms = {socks_early_reply_ms}
 socks_bind = "127.0.0.1:{socks_port}"
 socks_user = ""
 socks_passwd = ""
@@ -748,6 +757,8 @@ custom_proxy_domain = [
         server_address = escape_toml(server_address),
         server_port = config.port,
         proxy_all = config.proxy_all,
+        socks_connect_timeout = SOCKS_CONNECT_TIMEOUT_SECS,
+        socks_early_reply_ms = SOCKS_EARLY_REPLY_MS,
         disable_fdu_config = config.disable_fdu_config,
         disable_fdu_dns = config.disable_fdu_dns,
         socks_port = socks_port,
@@ -796,6 +807,9 @@ mod tests {
         assert!(toml.contains("dial_direct_proxy = \"\""));
         // 默认路由默认开启（校园 VPN 全走 RVPN 隧道）
         assert!(toml.contains("proxy_all = true"));
+        // 补丁版 fdu-connect 的 SOCKS5 建连宽限
+        assert!(toml.contains("socks_connect_timeout = 20"));
+        assert!(toml.contains("socks_early_reply_ms = 2000"));
     }
 
     #[test]

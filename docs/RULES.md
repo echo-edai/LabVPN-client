@@ -108,6 +108,13 @@ fdu-connect 默认还会按 RVPN 自己的域名/网段规则决定“隧道 or 
 因此生成的 `fdu-connect` 配置默认 `proxy_all = true`（「校内 VPN → 高级 → 校园 VPN 默认路由」可关闭）：
 交给校内 VPN 的流量全部由 RVPN 隧道承载。该开关只影响 fdu-connect 内部的二次分流，不改变 mihomo 规则顺序。
 
+> **慢握手宽限**：捆绑的 fdu-connect 带 `robust-socks` 补丁（见
+> [`vendor/fdu-connect/PATCH.md`](../vendor/fdu-connect/PATCH.md)）。mihomo 对 SOCKS5
+> 拨号只等 5s，而 RVPN 用户态栈的 TCP 握手在丢包时可能超过 10s；补丁版在 2s 后先回
+> SOCKS5 成功，然后分段握手（每次 4s，失败即换新连接重试，总预算 20s），并把 gVisor 的
+> SYN 重传下限从 1s 降到 500ms。因此日志里不会再出现成片的
+> `dial 🎓 校内 ... context deadline exceeded`（短时抖动会被吸收，真失败也只是连接被关闭）。
+
 ## 6.2 旦挞（DanXi / Danta）访问的域名（核对记录）
 
 | 域名 | 用途 | 公网解析 | 分流结果 |

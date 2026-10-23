@@ -51,11 +51,15 @@ node scripts/fetch-sidecars.mjs --helper   # 同时编译并复制 labvpn-helper
 
 `scripts/fetch-sidecars.mjs` 会自动准备 fdu-connect：
 
-1. 若设置了 `FDU_CONNECT_BIN` → 使用该二进制；
-2. 否则查找本机已有安装（`~/LocalDocuments/fdu-connect`、`/usr/local/bin` 等）；
-3. 否则在安装了 Go 1.24+ 的环境下，从固定 commit
-   `a904877f0eda0c7b1d7933ad6e80d5e8d3ffd584` 克隆源码并 `go build`；
+1. 若 `binaries/fdu-connect` 已存在 → 跳过（`--force` 可重建）；
+2. **优先**用 Go 1.24.x 编译 [`vendor/fdu-connect/`](../vendor/fdu-connect/PATCH.md)
+   （上游基线 `a904877f0eda0c7b1d7933ad6e80d5e8d3ffd584` + `robust-socks.patch`：
+   可取消握手 + SOCKS5 宽限应答）；
+3. 没有 Go 时回退：`FDU_CONNECT_BIN` → 本机已有安装 → 从上游固定 commit 克隆编译；
 4. 最后写入 `binaries/fdu-connect`（Windows 为 `.exe`），随 App 一起打包。
+
+> 必须使用 **Go 1.24.x**：上游依赖 `sagernet/sing` 的 `net.errNoSuchInterface` linkname
+> 在 Go 1.25+ 已变化，链接会失败。
 
 ```bash
 # CI / 干净环境（有 Go）
@@ -64,8 +68,9 @@ node scripts/fetch-sidecars.mjs --require-fdu
 FDU_CONNECT_BIN=~/LocalDocuments/fdu-connect/fdu-connect node scripts/fetch-sidecars.mjs
 ```
 
-**AGPL-3.0 合规**：fdu-connect 以独立进程打包、未修改源码；许可证与 NOTICE 随 App 位于
-`Resources/licenses/`，对应 commit 的源码归档由 Release 工作流上传为附件。
+**AGPL-3.0 合规**：fdu-connect 以独立进程打包，源码经本地补丁修改；修改后的**完整源码**
+随仓库提供于 `vendor/fdu-connect/`（`PATCH.md` + `robust-socks.patch`），许可证与 NOTICE
+随 App 位于 `Resources/licenses/`。
 
 ### 2.3 labvpn-helper（TUN 模式特权服务）
 

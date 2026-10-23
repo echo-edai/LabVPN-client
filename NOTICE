@@ -1,19 +1,24 @@
 # NOTICE — 第三方组件与数据来源
 
-LabVPN 本体以 **独立进程 + 配置文件** 的方式使用下列第三方项目，不修改其源码、
-不进行静态链接。各组件版权归原作者所有，分发其二进制时须遵守对应许可证。
+LabVPN 本体以 **独立进程 + 配置文件** 的方式使用下列第三方项目，不进行静态链接。
+各组件版权归原作者所有，分发其二进制时须遵守对应许可证。
+
+> 例外：`fdu-connect` 为了修复校园 VPN 偶发 `context deadline exceeded`（慢握手被客户端
+> 5s 超时误杀 + 握手不可取消）打了本地补丁。**修改后的完整源码随本仓库提供**：
+> `vendor/fdu-connect/`（含 `PATCH.md` 与 `robust-socks.patch`），满足 AGPL-3.0 的
+> Corresponding Source 义务；`scripts/fetch-sidecars.mjs` 优先用它编译随包二进制。
 
 ## 运行时 sidecar（随安装包分发）
 
 | 组件 | 许可证 | 上游 | 用法 |
 |---|---|---|---|
 | mihomo (Clash.Meta) | GPL-3.0 | https://github.com/MetaCubeX/mihomo | 代理核心，通过 `scripts/fetch-sidecars.mjs` 下载官方 release |
-| fdu-connect | AGPL-3.0 | https://github.com/AkiraSalvare/fdu-connect | 复旦校内 RVPN 连接器；**已随安装包打包**（独立进程、未修改源码）。构建 commit：`a904877f0eda0c7b1d7933ad6e80d5e8d3ffd584`；许可证随 App 提供，源码归档随 Release 附件提供 |
+| fdu-connect | AGPL-3.0 | https://github.com/AkiraSalvare/fdu-connect | 复旦校内 RVPN 连接器；**已随安装包打包**（独立进程，源码为基线 `a904877f0eda0c7b1d7933ad6e80d5e8d3ffd584` + 本地补丁 `robust-socks.patch`）。修改后完整源码见 `vendor/fdu-connect/`，许可证随 App 提供 |
 | zju-connect | GPL-3.0 | https://github.com/Mythologyli/zju-connect | fdu-connect 的上游项目 |
 | EasierConnect | GPL-3.0 | https://github.com/lyc8503/EasierConnect | EasyConnect 协议逆向实现（zju-connect 前身） |
 
-> GPL/AGPL 义务：mihomo 与 fdu-connect 二进制随 Release 分发；Release 页面同时提供
-> mihomo 对应版本来源、fdu-connect 对应 commit 的**完整源码归档**，并在 App 内
+> GPL/AGPL 义务：mihomo 与 fdu-connect 二进制随 Release 分发；mihomo 对应版本来源与
+> fdu-connect 修改后的**完整源码**（`vendor/fdu-connect/`）均在仓库中提供，App 内
 > `Resources/licenses/` 附带 AGPL-3.0 许可证与 NOTICE，满足 GPL/AGPL 的源码提供义务。
 
 ## 规则数据

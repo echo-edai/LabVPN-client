@@ -173,13 +173,15 @@ cargo test -p labvpn-core
 - 凭据使用 **AES-256-GCM + 机器绑定密钥**加密存储（文件 0600），不落明文配置。
 - 运行时含密码的临时配置文件在核心启动完成读取后**立即覆盖销毁**，不在磁盘留存。
 - 日志与诊断包对订阅 token、密码等字段自动脱敏。
-- App 内置 fdu-connect（AGPL-3.0）与 mihomo（GPL-3.0），独立进程运行；许可证与源码归档随 Release 提供。
+- App 内置 fdu-connect（AGPL-3.0）与 mihomo（GPL-3.0），独立进程运行。
+  fdu-connect 使用本地补丁版（修复校园 VPN 慢握手被 5s 超时误杀的问题），
+  修改后完整源码见 [`vendor/fdu-connect/`](vendor/fdu-connect/PATCH.md)；许可证随 App 提供。
 
 ## 合规与免责
 
 - 本项目仅供个人学习与校园网便利使用；请遵守复旦大学网络使用规定与当地法律法规。
-- fdu-connect（AGPL-3.0）与 mihomo（GPL-3.0）以**独立进程**打包；详见 [`NOTICE`](NOTICE)
-  与 Release 中的源码归档。
+- fdu-connect（AGPL-3.0，含本地补丁）与 mihomo（GPL-3.0）以**独立进程**打包；详见
+  [`NOTICE`](NOTICE) 与 [`vendor/fdu-connect/PATCH.md`](vendor/fdu-connect/PATCH.md)。
 - 非官方项目，与复旦大学、深信服科技无隶属关系。
 
 ## License
