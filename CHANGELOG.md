@@ -2,7 +2,19 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [0.1.11] — 预发布（当前）
+## [0.1.12] — 预发布（当前）
+
+### Fixed
+- **TUN 模式裸 IP（SSH / 数据库 / 内网）偶发不通**：mihomo 的 `auto-route` 在 macOS 上
+  偶发丢失下半区自动路由（`1.0.0.0/8 … 64.0.0.0/2` 这组前缀），`10.0.0.0/8` 落回默认网关，
+  表现为 `ssh 10.x`、数据库等裸 IP 连接超时（网页与订阅仍正常）。特权 helper 新增 TUN 自动路由自愈：
+  从生成配置推导应有的路由集合（两个默认半区扣除 `route-exclude-address`、跳过保留网段
+  `0.0.0.0/8`），每 3 秒校验并在缺失时自动 `route add` 补回，打开 TUN 后直接 `ssh <校内主机>`
+  即可，无需手动配置 `ProxyCommand` 或重启核心。实现：`crates/labvpn-helper/src/tun_guard.rs`（仅 macOS）。
+  注意自愈集合不包含 `0.0.0.0/1`：实测在 macOS 手动添加该路由会让 mihomo 出口全部
+  `network is unreachable`，等价于断网。
+
+## [0.1.11] — 预发布
 
 ### Added
 - **应用内检测更新**：启动后自动检查 GitHub Release（可在设置中关闭），发现新版本时

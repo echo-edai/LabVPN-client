@@ -10,6 +10,7 @@ use std::time::Instant;
 use labvpn_core::ipc::{CoreStatus, MAX_REQUEST_BYTES};
 
 use crate::logging;
+use crate::tun_guard::{self, TunRoutePlan};
 
 /// 核心进程托管器。
 pub struct Supervisor {
@@ -24,6 +25,8 @@ struct Inner {
     started_at: Option<Instant>,
     last_error: Option<String>,
     config_generation: Option<u64>,
+    /// 本次核心会话应有的 TUN 自动路由（供路由自愈线程使用）
+    tun_plan: Option<TunRoutePlan>,
 }
 
 impl Supervisor {
@@ -40,6 +43,7 @@ impl Supervisor {
                 started_at: None,
                 last_error: None,
                 config_generation: None,
+                tun_plan: None,
             }),
         }
     }
@@ -151,6 +155,11 @@ impl Supervisor {
         inner.started_at = Some(Instant::now());
         inner.last_error = None;
         inner.config_generation = Some(now_secs());
+        // 从生成配置解析本会话应有的 TUN 自动路由，交给自愈线程巡检
+        inner.tun_plan = tun_guard::plan_from_config(config_yaml);
+        if inner.tun_plan.is_some() {
+            logging::info("TUN 自动路由守护已启用（缺失时自动补回）");
+        }
         logging::info(format!(
             "核心已启动 pid={pid} config={}",
             config_path.display()
@@ -171,7 +180,16 @@ impl Supervisor {
         }
         remove_pid_file(&self.workdir);
         inner.started_at = None;
+        inner.tun_plan = None;
         status_locked(&self.log_path, &mut inner)
+    }
+
+    /// 当前会话的 TUN 自动路由计划（自愈线程使用）。
+    pub fn tun_plan(&self) -> Option<TunRoutePlan> {
+        self.inner
+            .lock()
+            .ok()
+            .and_then(|inner| inner.tun_plan.clone())
     }
 
     /// 查询状态（会顺带回收已退出的子进程）。
@@ -208,6 +226,7 @@ fn status_locked(log_path: &Path, inner: &mut Inner) -> CoreStatus {
         Ok(Some(status)) => {
             inner.child = None;
             inner.started_at = None;
+            inner.tun_plan = None;
             inner.last_error = Some(format!("核心已退出（{status}）"));
             CoreStatus {
                 running: false,

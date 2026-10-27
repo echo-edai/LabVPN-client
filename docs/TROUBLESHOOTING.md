@@ -77,6 +77,21 @@ mihomo 按 `nameserver-policy` 用校内 DNS（`202.120.224.26`）解析 → 离
 | Windows 每次启动都弹 UAC | 设计如此（无系统服务）；可选 `schtasks /RL HIGHEST` 自建开机任务 |
 | 开启 TUN 后无网络 | 关闭其他 TUN；尝试 TUN 协议栈切换为 `gvisor`；把 MTU 降到 1400 |
 | TUN 与公司 VPN 冲突 | 在设置中把公司 VPN 服务器加入「路由排除地址」 |
+| 裸 IP 不通（`ssh 10.x` 超时，网页/订阅却正常） | 先看 `helper.log` 是否有「TUN 自动路由缺失，已补回」——那是 helper 在自愈。若仍不通：重连一次；`route -n get 10.134.142.226` 应显示 `interface: utun*`（不是 `en0`）；紧急可 `sudo route -n add -net 10.0.0.0/8 -interface utunX` 后重试 |
+
+### 6.1 裸 IP（SSH / 数据库 / 内网）偶发不通
+
+`ssh -vvv 10.x` 停在 `Connecting …` 后超时、连 `Connection established` 都没有，说明 TCP 没通；
+而 `nc -X 5 -x 127.0.0.1:11080 <ip> 22` 能拿到 `SSH-2.0-OpenSSH_*`，说明校内 VPN 和服务器都正常。
+此时多半是 mihomo 的自动路由丢了**下半区**（`1.0.0.0/8 … 64.0.0.0/2` 这组前缀）：
+`10.0.0.0/8` 属于这个范围，包会从默认网关发到公网。
+
+- helper（macOS）会在 3 秒内自动补回，`helper.log` 记录缺失/补回的具体前缀；
+- 若自动补回失败，退出 LabVPN 重连（核心重启会重新安装完整路由）；
+- 不要通过给 `~/.ssh/config` 加 `ProxyCommand` 来长期绕过——那会掩盖同类问题（本项修复前的老办法）。
+- 注意：**不要**手动 `route add 0.0.0.0/1`——在 macOS 上这条路由会让 mihomo 的出口连接
+  全部报 `network is unreachable`（表现为整机断网、聊天/网页全部失败）。保留网段
+  `0.0.0.0/8` 必须留给系统。
 
 ## 7. 与 Clash / Shadowrocket 冲突
 

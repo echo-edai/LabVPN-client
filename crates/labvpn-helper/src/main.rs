@@ -13,6 +13,7 @@ mod logging;
 mod server;
 mod service;
 mod supervisor;
+mod tun_guard;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -83,6 +84,8 @@ fn serve(args: &[String]) -> Result<(), String> {
         options.workdir.display()
     ));
     let supervisor = Arc::new(supervisor::Supervisor::new(core_path, options.workdir));
+    // TUN 路由自愈：mihomo auto-route 偶发丢失 0.0.0.0/1 时自动补回
+    tun_guard::spawn(Arc::clone(&supervisor));
     server::run(options.port, token, supervisor).map_err(|err| format!("监听失败：{err}"))
 }
 

@@ -5,7 +5,7 @@
 [中文](README.md) | English
 
 [![CI](https://github.com/echo-edai/LabVPN-client/actions/workflows/ci.yml/badge.svg)](https://github.com/echo-edai/LabVPN-client/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/badge/release-v0.1.7--pre-8b5cf6)](https://github.com/echo-edai/LabVPN-client/releases/tag/v0.1.7)
+[![Release](https://img.shields.io/badge/release-v0.1.12--pre-8b5cf6)](https://github.com/echo-edai/LabVPN-client/releases/tag/v0.1.12)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 LabVPN integrates **Clash/mihomo subscription + Fudan RVPN + SSH outbound** into one desktop app:
@@ -19,16 +19,16 @@ Built with Tauri 2 + mihomo (Clash.Meta), for macOS / Windows / Ubuntu / AlmaLin
 
 ## Download
 
-Latest pre-release **v0.1.7** (unsigned; macOS: right-click → Open, Windows: SmartScreen → Run anyway):
+Latest pre-release **v0.1.12** (unsigned; macOS: right-click → Open, Windows: SmartScreen → Run anyway):
 
 | Platform | Artifacts |
 |---|---|
-| macOS ARM / Intel | `LabVPN_0.1.7_aarch64.dmg` / `LabVPN_0.1.7_x64.dmg` |
-| Windows 10/11 | `LabVPN_0.1.7_x64-setup.exe` / `.msi` |
+| macOS ARM / Intel | `LabVPN_0.1.12_aarch64.dmg` / `LabVPN_0.1.12_x64.dmg` |
+| Windows 10/11 | `LabVPN_0.1.12_x64-setup.exe` / `.msi` |
 | Ubuntu 22.04+ | `.deb` / `.AppImage` |
 | AlmaLinux 9+ | `.rpm` |
 
-👉 [Releases · v0.1.7 (pre-release)](https://github.com/echo-edai/LabVPN-client/releases/tag/v0.1.7)
+👉 [Releases · v0.1.12 (pre-release)](https://github.com/echo-edai/LabVPN-client/releases/tag/v0.1.12)
 
 ## Features
 
