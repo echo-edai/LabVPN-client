@@ -2,7 +2,19 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [0.1.12] — 预发布（当前）
+## [0.1.13] — 未发布（main）
+
+### Added
+- **运行日志页新增来源切换**：「全部 / 校内 VPN / 核心 / 引擎 / 其他」。校内 VPN 页集中展示
+  fdu-connect 的建连、重试、KeepAlive 日志，便于单独排查 RVPN 侧问题。
+- **校内 VPN 错误日志分级**：fdu-connect stdout 中的 `[E]`、`failed`、`timeout`、
+  `context deadline exceeded`、`reset by peer` 等行提升为 `warn`，在日志页直接高亮。
+
+### Docs
+- 补充「为什么 `ping 10.x` 不通、但 SSH 可用」：ICMP 不会进入校内 VPN 的 SOCKS5 隧道，
+  mihomo TUN 的真实 IP ICMP 固定走本机 DIRECT，不能作为校内连通性判断。
+
+## [0.1.12] — 预发布
 
 ### Fixed
 - **TUN 模式裸 IP（SSH / 数据库 / 内网）偶发不通**：mihomo 的 `auto-route` 在 macOS 上

@@ -60,6 +60,29 @@ const ERROR_MARKERS: &[&str] = &[
     "Permission denied",
 ];
 
+/// fdu-connect 的 stdout 里混有错误行（如 `[SOCKS5] ... [E]: server: context deadline exceeded`），
+/// 统一按 info 记录会让「运行日志 → 校内 VPN」难以定位；这里把错误关键字提升为 warn。
+fn vpn_log_level(line: &str) -> &'static str {
+    const WARN_MARKERS: &[&str] = &[
+        "[e]:",
+        " error",
+        "error:",
+        "failed",
+        "timeout",
+        "deadline exceeded",
+        "reset by peer",
+        "broken pipe",
+        "connection refused",
+        "no route to host",
+    ];
+    let lower = line.to_ascii_lowercase();
+    if WARN_MARKERS.iter().any(|marker| lower.contains(marker)) {
+        "warn"
+    } else {
+        "info"
+    }
+}
+
 struct Inner {
     state: String,
     child: Option<Child>,
@@ -254,7 +277,11 @@ impl VpnManager {
             if let Some(stdout) = stdout {
                 let mut lines = BufReader::new(stdout).lines();
                 while let Ok(Some(line)) = lines.next_line().await {
-                    logs.info("vpn", &line);
+                    if vpn_log_level(&line) == "warn" {
+                        logs.warn("vpn", &line);
+                    } else {
+                        logs.info("vpn", &line);
+                    }
                     let mut buffer = log_lines_stdout.lock().await;
                     buffer.push(line);
                     if buffer.len() > 200 {
@@ -789,6 +816,44 @@ mod tests {
     fn escapes_toml_strings() {
         assert_eq!(escape_toml("a\\b\"c"), "a\\\\b\\\"c");
         assert_eq!(escape_toml("line\nbreak"), "line\\nbreak");
+    }
+
+    #[test]
+    fn classifies_vpn_log_lines() {
+        assert_eq!(
+            vpn_log_level(
+                "2026/10/27 12:52:44 SOCKS5: tcp -> 10.134.142.235:22 attempt 4 failed \
+                 (context deadline exceeded), retrying"
+            ),
+            "warn"
+        );
+        assert_eq!(
+            vpn_log_level(
+                "KeepAlive: lookup www.baidu.com on 223.5.5.5:53: read udp \
+                 10.230.33.220:43982: i/o timeout"
+            ),
+            "warn"
+        );
+        assert_eq!(
+            vpn_log_level(
+                "[SOCKS5] 2026/10/27 12:52:48 [E]: server: readfrom tcp \
+                 127.0.0.1:11080->127.0.0.1:59245: read tcp 10.230.33.220:57625: \
+                 connection reset by peer"
+            ),
+            "warn"
+        );
+        assert_eq!(
+            vpn_log_level(
+                "2026/10/27 12:52:35 SOCKS5: tcp -> 10.134.142.145:22 still connecting \
+                 after 2s, replying and waiting up to 20s"
+            ),
+            "info"
+        );
+        assert_eq!(vpn_log_level("KeepAlive: OK"), "info");
+        assert_eq!(
+            vpn_log_level("SOCKS5 server listening on 127.0.0.1:11080"),
+            "info"
+        );
     }
 
     #[test]

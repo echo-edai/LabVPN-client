@@ -305,7 +305,12 @@ export const zhCN = {
   // 日志
   "logs.title": "运行日志",
   "logs.subtitle": "应用、核心、校内 VPN 与特权服务的日志",
-  "logs.allSources": "全部来源",
+  "logs.tabAll": "全部",
+  "logs.tabVpn": "校内 VPN",
+  "logs.tabCore": "核心",
+  "logs.tabEngine": "引擎",
+  "logs.tabOther": "其他",
+  "logs.vpnHint": "fdu-connect 输出：建连超时、重试、连接重置等错误会标为 warn，便于定位校内 VPN 问题。",
   "logs.levelAll": "全部级别",
   "logs.clear": "清空内存日志",
   "logs.copy": "复制全部",

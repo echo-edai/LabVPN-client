@@ -152,10 +152,7 @@ pub fn complement(excluded: &[Ipv4Cidr]) -> Vec<Ipv4Cidr> {
     if let Some(reserved) = Ipv4Cidr::parse(AUTO_ROUTE_SKIP) {
         blocked.push(reserved);
     }
-    let mut routes = vec![
-        Ipv4Cidr::new(0x0000_0000, 1),
-        Ipv4Cidr::new(0x8000_0000, 1),
-    ];
+    let mut routes = vec![Ipv4Cidr::new(0x0000_0000, 1), Ipv4Cidr::new(0x8000_0000, 1)];
     for prefix in &blocked {
         let mut next = Vec::new();
         for route in routes {
@@ -272,7 +269,10 @@ fn is_interface_name(value: &str) -> bool {
         && value
             .chars()
             .all(|ch| ch.is_ascii_alphanumeric() || ch == '.' || ch == '_')
-        && value.chars().next().is_some_and(|ch| ch.is_ascii_alphabetic())
+        && value
+            .chars()
+            .next()
+            .is_some_and(|ch| ch.is_ascii_alphabetic())
 }
 
 /// 找出本会话的 TUN 接口。
@@ -576,7 +576,10 @@ tun:
         )
         .expect("plan");
         assert_eq!(plan.excluded.len(), 1);
-        assert!(plan.expected.iter().any(|prefix| prefix.to_string() == "16.0.0.0/4"));
+        assert!(plan
+            .expected
+            .iter()
+            .any(|prefix| prefix.to_string() == "16.0.0.0/4"));
     }
 
     #[test]

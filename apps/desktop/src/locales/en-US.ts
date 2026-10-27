@@ -184,6 +184,13 @@ export const enUS: Partial<Record<MessageKey, string>> = {
 
   "logs.title": "Logs",
   "logs.subtitle": "Application, core, campus VPN and helper logs",
+  "logs.tabAll": "All",
+  "logs.tabVpn": "Campus VPN",
+  "logs.tabCore": "Core",
+  "logs.tabEngine": "Engine",
+  "logs.tabOther": "Other",
+  "logs.vpnHint": "fdu-connect output: handshake timeouts, retries and connection resets are highlighted as warn.",
+  "logs.levelAll": "All levels",
   "logs.clear": "Clear memory logs",
   "logs.copy": "Copy all",
   "logs.empty": "No logs yet",

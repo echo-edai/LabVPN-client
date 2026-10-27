@@ -78,6 +78,7 @@ mihomo 按 `nameserver-policy` 用校内 DNS（`202.120.224.26`）解析 → 离
 | 开启 TUN 后无网络 | 关闭其他 TUN；尝试 TUN 协议栈切换为 `gvisor`；把 MTU 降到 1400 |
 | TUN 与公司 VPN 冲突 | 在设置中把公司 VPN 服务器加入「路由排除地址」 |
 | 裸 IP 不通（`ssh 10.x` 超时，网页/订阅却正常） | 先看 `helper.log` 是否有「TUN 自动路由缺失，已补回」——那是 helper 在自愈。若仍不通：重连一次；`route -n get 10.134.142.226` 应显示 `interface: utun*`（不是 `en0`）；紧急可 `sudo route -n add -net 10.0.0.0/8 -interface utunX` 后重试 |
+| 开了 VPN 但 `ping 10.x` 不通 | **这是正常的**：mihomo TUN 的 ICMP 只走本机 DIRECT（`core.log` 里 `[ICMP] ... using DIRECT`），不会进入校内 VPN 的 SOCKS5 隧道；判断连通性请用 `ssh` / `nc -z <ip> 22` / `curl`。详见 6.2 |
 
 ### 6.1 裸 IP（SSH / 数据库 / 内网）偶发不通
 
@@ -92,6 +93,21 @@ mihomo 按 `nameserver-policy` 用校内 DNS（`202.120.224.26`）解析 → 离
 - 注意：**不要**手动 `route add 0.0.0.0/1`——在 macOS 上这条路由会让 mihomo 的出口连接
   全部报 `network is unreachable`（表现为整机断网、聊天/网页全部失败）。保留网段
   `0.0.0.0/8` 必须留给系统。
+
+### 6.2 为什么 `ping 10.x` 不通，但 `ssh` 可以
+
+校内 VPN（fdu-connect）给 mihomo 用的是 **SOCKS5 代理，只承载 TCP**（生成配置里 `🏫 校内 VPN`
+为 `type: socks5`、`udp: false`），ICMP 无法经它转发。mihomo 的 TUN 对真实 IP 的 ICMP 只有两种处理
+（`listener/sing_tun/prepare.go`）：
+
+- fake-ip 域名探测 → `using fake ping echo`（本地伪造回显，不代表真实连通）；
+- 其余 ICMP → `using DIRECT`（本机 raw socket 从物理网卡直接发出，**不经过规则/隧道**）。
+
+所以离校时 `ping 10.134.142.x` 会从家宽/热点发往公网后丢包，**与 VPN 是否正常无关**。
+判断校内连通性请用 TCP：`nc -z 10.134.142.226 22`、`ssh`、`curl -k https://10.x/`。
+
+「运行日志」页现在有「校内 VPN」切换页，可只看 fdu-connect 的建连 / 重试 / KeepAlive 日志；
+其中的握手超时、连接重置等错误会以 **warn** 高亮，便于定位 RVPN 侧问题。
 
 ## 7. 与 Clash / Shadowrocket 冲突
 
