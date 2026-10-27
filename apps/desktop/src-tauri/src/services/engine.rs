@@ -446,9 +446,23 @@ impl EngineManager {
         self.inner.lock().await.api.clone()
     }
 
-    /// 是否运行中。
+    /// 是否运行中（缓存状态，不探测真实进程）。
     pub async fn is_running(&self) -> bool {
         self.inner.lock().await.status.running
+    }
+
+    /// 核心是否真的存活：请求 mihomo REST API（2 秒超时）。
+    ///
+    /// `is_running()` 只是 App 缓存的状态；helper 被重启或 mihomo 意外退出时缓存仍可能是
+    /// `true`。自动恢复监控用本方法判断「状态说在跑、实际已死」。
+    pub async fn core_alive(&self) -> bool {
+        let Some(api) = self.api().await else {
+            return false;
+        };
+        tokio::time::timeout(Duration::from_secs(2), api.version())
+            .await
+            .map(|result| result.is_ok())
+            .unwrap_or(false)
     }
 
     /// 设置校内外分流组选中项（不重启内核）。

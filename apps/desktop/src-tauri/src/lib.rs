@@ -48,6 +48,7 @@ pub fn run() {
             services::stats::spawn(handle.clone());
             spawn_startup_tasks(handle.clone());
             services::vpn::spawn_health_monitor(handle.clone());
+            services::orchestrator::spawn_engine_watchdog(handle.clone());
             Ok(())
         })
         .on_window_event(|window, event| {

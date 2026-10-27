@@ -24,6 +24,9 @@ pub struct MihomoConfig {
     pub tcp_concurrent: bool,
     /// 进程匹配模式（PROCESS-NAME 规则需要）
     pub find_process_mode: String,
+    /// 显式出口网卡（避免 mihomo auto-detect 在换网/唤醒后报 interface not found）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub interface_name: Option<String>,
     /// REST 控制地址
     pub external_controller: String,
     /// REST 控制密钥

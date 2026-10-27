@@ -111,6 +111,16 @@ mihomo 按 `nameserver-policy` 用校内 DNS（`202.120.224.26`）解析 → 离
 KeepAlive 成功率、隧道中断窗口（起止/时长/期间失败次数）、主要错误与结论建议（例如
 「隧道被服务端/NAT 丢弃，但 fdu-connect 只在启动时授权、不会自动重新登录」）。
 
+### 6.4 大量 `error: interface not found` / 连接成功率极低
+
+旧版本 mihomo 配置依赖 `auto-detect-interface` 自动探测出口网卡；macOS 换网、热点切换、
+helper 重启或系统唤醒后，探测结果会失效，所有裸 IP/DIRECT 连接会瞬间失败（日志里
+`[TCP] ... error: interface not found`），表现为 `ssh 10.x` 成功率极低，但 ping/网页可能间歇正常。
+
+v0.1.15 起连接时会**显式绑定当前物理默认网卡**（生成配置里的 `interface-name`），日志会打印
+`出口网卡：en0（显式绑定，避免 interface not found）`。若仍看到该错误，检查日志里记录的网卡名
+是否等于 `route -n get default` 的 interface，并重连一次让配置重新生成。
+
 ### 6.3 隧道被服务端丢弃 / 长时间中断
 
 RVPN 数据面被服务端或 NAT 丢弃时，`KeepAlive` 会连续失败，表现为「用一段时间后 SSH 突然超时」。

@@ -3,6 +3,8 @@
 use labvpn_core::config::{secret_keys, AppConfig, IssueLevel, NodeSelectionMode, SshAuth};
 use labvpn_core::generator::{self, ProfileSource, RuntimeContext, SshRuntime};
 use labvpn_core::rules::names;
+use std::time::{Duration, Instant};
+
 use tauri::{AppHandle, Manager};
 
 use crate::dto::{EngineStatus, VpnStatus};
@@ -264,6 +266,86 @@ pub async fn on_campus_changed(app: &AppHandle) {
     }
 }
 
+/// 核心自动恢复：每 15 秒检查一次，App 认为「已连接」但 mihomo 控制端口无响应时，
+/// 自动执行一次完整重连（disconnect + connect），恢复 TUN/路由。
+///
+/// 触发场景：helper 被重新安装/重启、mihomo 崩溃、系统唤醒后核心丢失。此时旧 SSH 会话
+/// 已随 TUN 接口消失而断开（EADDRNOTAVAIL），重连后新连接即可恢复。
+pub fn spawn_engine_watchdog(app: AppHandle) {
+    const WINDOW: Duration = Duration::from_secs(10 * 60);
+    tauri::async_runtime::spawn(async move {
+        let mut history: Vec<Instant> = Vec::new();
+        let mut cap_logged = false;
+        loop {
+            tokio::time::sleep(Duration::from_secs(15)).await;
+            let state = app.state::<AppState>();
+            let status = state.engine.status().await;
+            if !status.running {
+                history.clear();
+                cap_logged = false;
+                continue;
+            }
+            if state.engine.core_alive().await {
+                if !history.is_empty() {
+                    history.clear();
+                    cap_logged = false;
+                }
+                continue;
+            }
+            let now = Instant::now();
+            history.retain(|when| now.duration_since(*when) < WINDOW);
+            if !should_recover_core(true, false, history.len(), false) {
+                if !cap_logged {
+                    cap_logged = true;
+                    state.logs.error(
+                        "engine",
+                        "[核心自动恢复] 核心无响应且 10 分钟内已自动恢复 3 次，暂停恢复；请手动重连或检查网络",
+                    );
+                }
+                continue;
+            }
+            history.push(now);
+            state.logs.warn(
+                "engine",
+                "[核心自动恢复] 检测到 TUN 核心无响应（helper/core 可能被重启），自动恢复连接…",
+            );
+            let result = apply_config(&state).await;
+            match result {
+                Ok(Some(_)) => state
+                    .logs
+                    .info("engine", "[核心自动恢复] 恢复完成，TUN/路由已重建"),
+                Ok(None) => state
+                    .logs
+                    .warn("engine", "[核心自动恢复] 核心未运行，跳过本次恢复"),
+                Err(err) => state
+                    .logs
+                    .error("engine", format!("[核心自动恢复] 恢复失败：{err}")),
+            }
+        }
+    });
+}
+
+/// 是否应触发核心自动恢复（纯函数，便于单测）。
+fn should_recover_core(running: bool, alive: bool, attempts: usize, in_progress: bool) -> bool {
+    const MAX_ATTEMPTS: usize = 3;
+    running && !alive && !in_progress && attempts < MAX_ATTEMPTS
+}
+
+/// 探测物理出口网卡（跳过 utun/tun/tap 等虚拟网卡）。
+fn detect_outbound_interface() -> Option<String> {
+    let interfaces = labvpn_core::probe::collect_interfaces();
+    let candidate = labvpn_core::probe::pick_primary_interface(&interfaces)
+        .map(|iface| iface.name.clone())
+        .or_else(platform::default_interface);
+    candidate.filter(|name| {
+        !name.starts_with("utun")
+            && !name.starts_with("tun")
+            && !name.starts_with("tap")
+            && !name.starts_with("ipsec")
+            && !name.starts_with("ppp")
+    })
+}
+
 async fn helper_readiness(state: &AppState) -> (u16, String, bool) {
     let port = helper::default_port();
     let token = match helper::ensure_token(&state.paths.token_file) {
@@ -388,6 +470,16 @@ async fn build_runtime(
     let controller_secret = config_service::ensure_controller_secret(&state.secrets, config)?;
     let interfaces = labvpn_core::probe::collect_interfaces();
     let local_subnets = labvpn_core::probe::local_subnets(&interfaces);
+    // 显式绑定物理出口网卡：mihomo 的 auto-detect-interface 在 macOS 换网/唤醒后
+    // 会出现 `error: interface not found`，所有连接瞬间失败；这里在连接时把当前
+    // 物理默认网卡写进配置，避免依赖运行时自动探测。
+    let interface_name = detect_outbound_interface();
+    if let Some(name) = &interface_name {
+        state.logs.info(
+            "engine",
+            format!("出口网卡：{name}（显式绑定，避免 interface not found）"),
+        );
+    }
 
     let context = RuntimeContext {
         on_campus,
@@ -403,6 +495,7 @@ async fn build_runtime(
         ssh_runtime,
         extra_route_exclude: Vec::new(),
         warnings_in: Vec::new(),
+        interface_name,
     };
     Ok(BuiltRuntime {
         context,
@@ -543,4 +636,22 @@ fn pick_free_port(preferred: u16, label: &str, warnings: &mut Vec<String>) -> u1
         "{label} {preferred} 被占用且附近没有可用端口，请手动修改端口"
     ));
     preferred
+}
+
+#[cfg(test)]
+mod recovery_tests {
+    use super::should_recover_core;
+
+    #[test]
+    fn core_recovery_policy() {
+        assert!(!should_recover_core(false, false, 0, false), "未连接不恢复");
+        assert!(!should_recover_core(true, true, 0, false), "核心存活不恢复");
+        assert!(!should_recover_core(true, false, 0, true), "恢复中不重复");
+        assert!(
+            !should_recover_core(true, false, 3, false),
+            "超过次数不恢复"
+        );
+        assert!(should_recover_core(true, false, 0, false));
+        assert!(should_recover_core(true, false, 2, false));
+    }
 }

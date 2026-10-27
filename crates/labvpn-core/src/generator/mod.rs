@@ -74,6 +74,8 @@ pub struct RuntimeContext {
     pub extra_route_exclude: Vec<String>,
     /// 应用层追加的警告
     pub warnings_in: Vec<String>,
+    /// 显式出口网卡（物理默认网卡；None 时由 mihomo 自动探测）
+    pub interface_name: Option<String>,
 }
 
 impl Default for RuntimeContext {
@@ -92,6 +94,7 @@ impl Default for RuntimeContext {
             ssh_runtime: None,
             extra_route_exclude: Vec::new(),
             warnings_in: Vec::new(),
+            interface_name: None,
         }
     }
 }
@@ -159,6 +162,7 @@ pub fn generate(config: &AppConfig, ctx: &RuntimeContext) -> CoreResult<Generate
         unified_delay: true,
         tcp_concurrent: true,
         find_process_mode: "strict".to_string(),
+        interface_name: ctx.interface_name.clone(),
         external_controller: format!("127.0.0.1:{}", config.engine.controller_port),
         secret: ctx.controller_secret.clone(),
         profile: ProfileSection {
@@ -518,7 +522,16 @@ mod tests {
             }),
             extra_route_exclude: Vec::new(),
             warnings_in: Vec::new(),
+            interface_name: None,
         }
+    }
+
+    #[test]
+    fn emits_interface_name_when_provided() {
+        let mut ctx = demo_context();
+        ctx.interface_name = Some("en0".to_string());
+        let generated = generate(&demo_config(), &ctx).expect("generate");
+        assert!(generated.yaml.contains("interface-name: en0"));
     }
 
     #[test]

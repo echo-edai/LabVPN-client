@@ -2,7 +2,21 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [0.1.14] — 预发布（当前）
+## [0.1.15] — 预发布（当前）
+
+### Added
+- **核心自动恢复**：每 15 秒探测 mihomo 控制端口；当 App 仍显示「已连接」但核心实际已退出
+  （helper 被重装/重启、mihomo 崩溃、系统唤醒后丢失）时，自动执行完整重连恢复 TUN 和路由。
+  10 分钟内最多恢复 3 次，超限记录 error；日志页出现 `[核心自动恢复]` 事件。旧 SSH 会话会
+  随 TUN 重建而断开（客户端 `Can't assign requested address`），重连后新连接恢复。
+
+### Fixed
+- **连接成功率低（界面/日志大量 `error: interface not found`）**：mihomo 的出口网卡自动探测
+  在 macOS 换网、热点切换、helper 重启后会失效，导致所有裸 IP 连接（10.x / DIRECT）
+  瞬间失败。现在连接时显式把当前物理默认网卡写入 mihomo 配置 `interface-name`，不再依赖
+  运行时自动探测；日志会记录 `出口网卡：en0（显式绑定）`。
+
+## [0.1.14] — 已发布（2026-10-27）
 
 ### Added
 - **隧道中断自动重启**：KeepAlive 连续失败 3 次（约 3 分钟，说明 RVPN 数据面已被服务端/NAT
