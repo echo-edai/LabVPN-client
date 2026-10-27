@@ -11,6 +11,9 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use labvpn_core::config::CampusVpnConfig;
+use tauri::Manager;
+
+use crate::state::AppState;
 use labvpn_core::vpn_log::EVENT_PREFIX;
 use tauri::AppHandle;
 use tokio::io::{AsyncBufReadExt, BufReader};
@@ -254,6 +257,47 @@ fn classify_vpn_line(line: &str, health: &mut VpnHealth) -> Option<(&'static str
     None
 }
 
+/// 自动重启策略常量：KeepAlive 连续失败达到阈值即重启（等效重新授权）。
+const AUTO_RESTART_FAIL_THRESHOLD: u64 = 3;
+/// 自动重启频率保护窗口。
+const AUTO_RESTART_WINDOW: Duration = Duration::from_secs(30 * 60);
+/// 窗口内最多自动重启次数。
+const AUTO_RESTART_MAX_PER_WINDOW: usize = 3;
+
+/// 连接健康快照。
+#[derive(Debug, Clone, Default)]
+pub struct VpnHealthReport {
+    /// KeepAlive 成功次数
+    pub keepalive_ok: u64,
+    /// KeepAlive 失败次数
+    pub keepalive_fail: u64,
+    /// 当前连续失败次数
+    pub fail_streak: u64,
+    /// 隧道已中断秒数（当前连续失败开始时计）
+    pub tunnel_down_secs: Option<u64>,
+}
+
+/// 自动重启的并发保护与频率记录。
+#[derive(Default)]
+struct RestartGuard {
+    in_progress: bool,
+    history: Vec<Instant>,
+    cap_logged: bool,
+}
+
+/// 是否应该触发自动重启（纯函数，便于单测）。
+fn should_auto_restart(
+    fail_streak: u64,
+    state: &str,
+    history_len: usize,
+    in_progress: bool,
+) -> bool {
+    fail_streak >= AUTO_RESTART_FAIL_THRESHOLD
+        && state == "running"
+        && !in_progress
+        && history_len < AUTO_RESTART_MAX_PER_WINDOW
+}
+
 struct Inner {
     state: String,
     child: Option<Child>,
@@ -274,6 +318,7 @@ pub struct VpnManager {
     app: AppHandle,
     logs: Arc<LogStore>,
     inner: Mutex<Inner>,
+    restart_guard: Mutex<RestartGuard>,
 }
 
 impl VpnManager {
@@ -282,6 +327,7 @@ impl VpnManager {
         Self {
             app,
             logs,
+            restart_guard: Mutex::new(RestartGuard::default()),
             inner: Mutex::new(Inner {
                 state: "stopped".to_string(),
                 child: None,
@@ -335,6 +381,107 @@ impl VpnManager {
             message: inner.message.clone(),
             last_error: inner.last_error.clone(),
             existing_instance: inner.existing,
+        }
+    }
+
+    /// 当前连接健康快照（供自动重启与诊断使用）。
+    pub async fn health(&self) -> VpnHealthReport {
+        let inner = self.inner.lock().await;
+        let Some(health) = inner.health.as_ref() else {
+            return VpnHealthReport::default();
+        };
+        let guard = match health.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        VpnHealthReport {
+            keepalive_ok: guard.keepalive_ok,
+            keepalive_fail: guard.keepalive_fail,
+            fail_streak: guard.fail_streak,
+            tunnel_down_secs: guard
+                .tunnel_down_since
+                .map(|since| since.elapsed().as_secs()),
+        }
+    }
+
+    /// KeepAlive 连续失败时自动重启 fdu-connect（等效重新授权）。
+    ///
+    /// 返回是否真的执行了重启。带 30 分钟窗口内最多 3 次的频率保护，避免网络长时间
+    /// 不可用时反复杀进程。
+    pub async fn auto_restart_if_needed(
+        &self,
+        config: &CampusVpnConfig,
+        secrets: &SecretStore,
+        paths: &AppPaths,
+    ) -> bool {
+        let health = self.health().await;
+        let mut guard = self.restart_guard.lock().await;
+        if health.fail_streak == 0 {
+            guard.cap_logged = false;
+            return false;
+        }
+        let now = Instant::now();
+        guard
+            .history
+            .retain(|when| now.duration_since(*when) < AUTO_RESTART_WINDOW);
+        let running = {
+            let inner = self.inner.lock().await;
+            inner.state == "running" && inner.child.is_some()
+        };
+        if !should_auto_restart(
+            health.fail_streak,
+            if running { "running" } else { "stopped" },
+            guard.history.len(),
+            guard.in_progress,
+        ) {
+            if health.fail_streak >= AUTO_RESTART_FAIL_THRESHOLD
+                && guard.history.len() >= AUTO_RESTART_MAX_PER_WINDOW
+                && !guard.cap_logged
+            {
+                guard.cap_logged = true;
+                let message = format!(
+                    "{EVENT_PREFIX} KeepAlive 连续失败 {} 次，但 30 分钟内已自动重启 {} 次，暂停自动重连；请手动重连或检查网络",
+                    health.fail_streak,
+                    guard.history.len()
+                );
+                drop(guard);
+                self.logs.error("vpn", message);
+            }
+            return false;
+        }
+        guard.in_progress = true;
+        guard.history.push(now);
+        drop(guard);
+
+        self.logs.warn(
+            "vpn",
+            format!(
+                "{EVENT_PREFIX} KeepAlive 连续失败 {} 次（keepalive_ok={} keepalive_fail={}，隧道中断约 {} 秒），自动重启 fdu-connect（等效重新授权）",
+                health.fail_streak,
+                health.keepalive_ok,
+                health.keepalive_fail,
+                health.tunnel_down_secs.unwrap_or(0)
+            ),
+        );
+        let _ = self.stop(config).await;
+        let result = self.start(config, secrets, paths).await;
+        {
+            let mut guard = self.restart_guard.lock().await;
+            guard.in_progress = false;
+        }
+        match result {
+            Ok(_) => {
+                self.logs.info(
+                    "vpn",
+                    format!("{EVENT_PREFIX} 自动重启完成，等待 KeepAlive 恢复"),
+                );
+                true
+            }
+            Err(err) => {
+                self.logs
+                    .error("vpn", format!("{EVENT_PREFIX} 自动重启失败：{err}"));
+                false
+            }
         }
     }
 
@@ -1045,9 +1192,40 @@ fn escape_toml(input: &str) -> String {
         .collect()
 }
 
+/// 启动自动重连监控（每 15 秒检查一次 KeepAlive 连续失败次数）。
+pub fn spawn_health_monitor(app: AppHandle) {
+    tauri::async_runtime::spawn(async move {
+        loop {
+            tokio::time::sleep(Duration::from_secs(15)).await;
+            let state = app.state::<AppState>();
+            let config = state.config_snapshot();
+            if !config.campus_vpn.enabled
+                || !config.campus_vpn.managed
+                || state.vpn.health().await.fail_streak == 0
+            {
+                continue;
+            }
+            let _ = state
+                .vpn
+                .auto_restart_if_needed(&config.campus_vpn, &state.secrets, &state.paths)
+                .await;
+        }
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn auto_restart_policy_thresholds() {
+        assert!(!should_auto_restart(2, "running", 0, false));
+        assert!(!should_auto_restart(3, "stopped", 0, false));
+        assert!(!should_auto_restart(3, "running", 0, true));
+        assert!(!should_auto_restart(3, "running", 3, false));
+        assert!(should_auto_restart(3, "running", 0, false));
+        assert!(should_auto_restart(10, "running", 2, false));
+    }
 
     #[test]
     fn escapes_toml_strings() {

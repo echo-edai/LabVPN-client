@@ -46,7 +46,8 @@ pub fn run() {
             setup_tray(app)?;
             services::campus::spawn_polling(handle.clone());
             services::stats::spawn(handle.clone());
-            spawn_startup_tasks(handle);
+            spawn_startup_tasks(handle.clone());
+            services::vpn::spawn_health_monitor(handle.clone());
             Ok(())
         })
         .on_window_event(|window, event| {
