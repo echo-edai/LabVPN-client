@@ -26,6 +26,7 @@ struct Inner {
     last_error: Option<String>,
     config_generation: Option<u64>,
     /// 本次核心会话应有的 TUN 自动路由（供路由自愈线程使用）
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     tun_plan: Option<TunRoutePlan>,
 }
 
@@ -185,6 +186,7 @@ impl Supervisor {
     }
 
     /// 当前会话的 TUN 自动路由计划（自愈线程使用）。
+    #[cfg(target_os = "macos")]
     pub fn tun_plan(&self) -> Option<TunRoutePlan> {
         self.inner
             .lock()

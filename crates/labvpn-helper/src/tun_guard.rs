@@ -17,14 +17,19 @@
 
 use std::fmt;
 use std::sync::Arc;
+
+#[cfg(target_os = "macos")]
 use std::time::Duration;
 
+#[cfg(target_os = "macos")]
 use crate::logging;
 use crate::supervisor::Supervisor;
 
 /// 巡检间隔。
+#[cfg(target_os = "macos")]
 const CHECK_INTERVAL: Duration = Duration::from_secs(3);
 /// 核心启动后的静默期：等 mihomo 自己把路由装完，避免抢跑。
+#[cfg(target_os = "macos")]
 const STARTUP_GRACE_SECS: u64 = 5;
 
 /// 一个 IPv4 CIDR（网络地址已按前缀长度对齐）。
@@ -193,6 +198,7 @@ fn subtract(prefix: Ipv4Cidr, blocked: Ipv4Cidr, out: &mut Vec<Ipv4Cidr>) {
 
 /// 解析路由表里的目的地址。`netstat` 会省略尾部为 0 的字节：
 /// `0/1`、`128.0/2` 带前缀；`202.120.225`（/24）、`10`（/8）需要按字节数推断。
+#[cfg(any(target_os = "macos", test))]
 fn parse_route_destination(field: &str) -> Option<Ipv4Cidr> {
     if field.contains('/') {
         return Ipv4Cidr::parse(field);
@@ -234,6 +240,7 @@ fn parse_ipv4(text: &str) -> Option<u32> {
 }
 
 /// 一条已安装的路由。
+#[cfg(any(target_os = "macos", test))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct InstalledRoute {
     destination: Ipv4Cidr,
@@ -241,6 +248,7 @@ struct InstalledRoute {
 }
 
 /// 解析 `netstat -rn -f inet` 输出。
+#[cfg(any(target_os = "macos", test))]
 fn parse_route_table(text: &str) -> Vec<InstalledRoute> {
     let mut routes = Vec::new();
     for line in text.lines() {
@@ -264,6 +272,7 @@ fn parse_route_table(text: &str) -> Vec<InstalledRoute> {
 }
 
 /// 过滤 `netstat` 里的非接口列（例如标题、过期时间标记）。
+#[cfg(any(target_os = "macos", test))]
 fn is_interface_name(value: &str) -> bool {
     !value.is_empty()
         && value
@@ -276,6 +285,7 @@ fn is_interface_name(value: &str) -> bool {
 }
 
 /// 找出本会话的 TUN 接口。
+#[cfg(any(target_os = "macos", test))]
 fn tunnel_interface(plan: &TunRoutePlan, routes: &[InstalledRoute]) -> Option<String> {
     let mut counts: Vec<(String, usize)> = Vec::new();
     for expected in &plan.expected {
@@ -295,11 +305,13 @@ fn tunnel_interface(plan: &TunRoutePlan, routes: &[InstalledRoute]) -> Option<St
         .map(|(name, _)| name)
 }
 
+#[cfg(any(target_os = "macos", test))]
 fn is_tunnel_interface(name: &str) -> bool {
     name.starts_with("utun") || name.starts_with("tun")
 }
 
 /// 当前路由表里缺失的期望路由（按期望顺序返回）。
+#[cfg(any(target_os = "macos", test))]
 fn missing_routes(
     plan: &TunRoutePlan,
     routes: &[InstalledRoute],
