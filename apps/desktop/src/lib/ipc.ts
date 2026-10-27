@@ -29,6 +29,7 @@ import type {
   SystemInfo,
   UpdateInfo,
   ValidationIssue,
+  VpnLogAnalysis,
   VpnStatus,
   VpnTestResult,
 } from "@/lib/types";
@@ -129,6 +130,7 @@ export const api = {
   stopVpn: () => call<VpnStatus>("stop_vpn"),
   vpnStatus: () => call<VpnStatus>("vpn_status"),
   testVpnConnection: () => call<VpnTestResult>("test_vpn_connection"),
+  analyzeVpnLogs: () => call<VpnLogAnalysis>("analyze_vpn_logs"),
   testSsh: (host: string, port: number) => call<SshTestResult>("test_ssh", { host, port }),
 
   // 系统

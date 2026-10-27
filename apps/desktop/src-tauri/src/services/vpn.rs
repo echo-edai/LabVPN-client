@@ -11,6 +11,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use labvpn_core::config::CampusVpnConfig;
+use labvpn_core::vpn_log::EVENT_PREFIX;
 use tauri::AppHandle;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
@@ -63,10 +64,17 @@ const ERROR_MARKERS: &[&str] = &[
 /// fdu-connect 的 stdout 里混有错误行（如 `[SOCKS5] ... [E]: server: context deadline exceeded`），
 /// 统一按 info 记录会让「运行日志 → 校内 VPN」难以定位；这里把错误关键字提升为 warn。
 fn vpn_log_level(line: &str) -> &'static str {
-    const WARN_MARKERS: &[&str] = &[
+    const ERROR_MARKERS: &[&str] = &[
         "[e]:",
-        " error",
         "error:",
+        " fatal",
+        "panic",
+        "登录失败",
+        "认证失败",
+        "cannot login",
+        "permission denied",
+    ];
+    const WARN_MARKERS: &[&str] = &[
         "failed",
         "timeout",
         "deadline exceeded",
@@ -74,13 +82,176 @@ fn vpn_log_level(line: &str) -> &'static str {
         "broken pipe",
         "connection refused",
         "no route to host",
+        "retrying",
     ];
     let lower = line.to_ascii_lowercase();
-    if WARN_MARKERS.iter().any(|marker| lower.contains(marker)) {
+    if ERROR_MARKERS.iter().any(|marker| lower.contains(marker)) {
+        "error"
+    } else if WARN_MARKERS.iter().any(|marker| lower.contains(marker)) {
         "warn"
     } else {
         "info"
     }
+}
+
+/// 会话级健康计数（供结构化事件与 60s 巡检使用）。
+#[derive(Default)]
+struct VpnHealth {
+    keepalive_ok: u64,
+    keepalive_fail: u64,
+    fail_streak: u64,
+    tunnel_down_since: Option<Instant>,
+    session_started: Option<Instant>,
+    twfid: Option<String>,
+    session_id: Option<String>,
+    socks_retry: u64,
+    tunnel_reset: u64,
+}
+
+impl VpnHealth {
+    fn reset_session(&mut self) {
+        *self = Self {
+            session_started: Some(Instant::now()),
+            ..Self::default()
+        };
+    }
+
+    fn snapshot_line(&self) -> String {
+        let state = if self.fail_streak >= 3 {
+            "down"
+        } else if self.fail_streak > 0 {
+            "degraded"
+        } else {
+            "ok"
+        };
+        let down = self
+            .tunnel_down_since
+            .map(|since| format!(" 中断持续={}s", since.elapsed().as_secs()))
+            .unwrap_or_default();
+        format!(
+            "{EVENT_PREFIX} 健康巡检 keepalive_ok={} keepalive_fail={} 连续失败={} 状态={state}{down}",
+            self.keepalive_ok, self.keepalive_fail, self.fail_streak
+        )
+    }
+
+    fn end_line(&self, reason: &str) -> String {
+        let uptime = self
+            .session_started
+            .map(|start| start.elapsed().as_secs())
+            .unwrap_or(0);
+        format!(
+            "{EVENT_PREFIX} 会话结束（{reason}）时长={uptime}s keepalive_ok={} keepalive_fail={} 数据重连={} SOCKS重试={}",
+            self.keepalive_ok, self.keepalive_fail, self.tunnel_reset, self.socks_retry
+        )
+    }
+}
+
+/// 去掉 fdu-connect 行内时间前缀（`2026/10/27 10:16:43 `）。
+fn strip_inner_ts(message: &str) -> &str {
+    let mut parts = message.splitn(3, ' ');
+    let (Some(first), Some(second)) = (parts.next(), parts.next()) else {
+        return message;
+    };
+    if first.len() >= 8 && first.contains('/') && second.matches(':').count() == 2 {
+        return parts.next().unwrap_or("");
+    }
+    message
+}
+
+/// 识别连接层关键事件并转成可检索的 `[VPN事件]` 日志。
+fn classify_vpn_line(line: &str, health: &mut VpnHealth) -> Option<(&'static str, String)> {
+    let message = strip_inner_ts(line.trim());
+    if message.starts_with("Start FDU Connect") {
+        health.reset_session();
+        return Some(("info", format!("{EVENT_PREFIX} 会话开始：{message}")));
+    }
+    if let Some(value) = message.strip_prefix("TWFID: ") {
+        health.twfid = Some(value.trim().to_string());
+        return None;
+    }
+    if message.starts_with("Update TWFID") {
+        if let Some((_, value)) = message.split_once(':') {
+            health.twfid = Some(value.trim().to_string());
+        }
+        return Some((
+            "info",
+            format!(
+                "{EVENT_PREFIX} TWFID 授权 twfid={}",
+                health.twfid.clone().unwrap_or_default()
+            ),
+        ));
+    }
+    if message.starts_with("TWFID has been authorized") {
+        return Some((
+            "info",
+            format!(
+                "{EVENT_PREFIX} 登录成功 twfid={}",
+                health.twfid.clone().unwrap_or_default()
+            ),
+        ));
+    }
+    if let Some(value) = message.strip_prefix("Server session ID: ") {
+        health.session_id = Some(value.trim().to_string());
+        return Some((
+            "info",
+            format!("{EVENT_PREFIX} 会话建立 session_id={}", value.trim()),
+        ));
+    }
+    if message.starts_with("KeepAlive: OK") {
+        health.keepalive_ok += 1;
+        health.fail_streak = 0;
+        if let Some(since) = health.tunnel_down_since.take() {
+            return Some((
+                "info",
+                format!(
+                    "{EVENT_PREFIX} 隧道恢复 中断时长={}s keepalive_ok={} keepalive_fail={}",
+                    since.elapsed().as_secs(),
+                    health.keepalive_ok,
+                    health.keepalive_fail
+                ),
+            ));
+        }
+        return None;
+    }
+    if message.starts_with("KeepAlive:") {
+        health.keepalive_fail += 1;
+        health.fail_streak += 1;
+        if health.tunnel_down_since.is_none() {
+            health.tunnel_down_since = Some(Instant::now());
+        }
+        return match health.fail_streak {
+            3 => Some((
+                "warn",
+                format!(
+                    "{EVENT_PREFIX} 隧道中断：KeepAlive 连续失败 3 次（{message}）；\
+                     fdu-connect 不会自动重新登录，只能等待隧道恢复或重启校内 VPN"
+                ),
+            )),
+            10 => Some((
+                "warn",
+                format!(
+                    "{EVENT_PREFIX} 隧道持续中断：KeepAlive 连续失败 {} 次，建议重启校内 VPN",
+                    health.fail_streak
+                ),
+            )),
+            _ => None,
+        };
+    }
+    if message.starts_with("Error occurred while receiving")
+        || message.starts_with("Error occurred while sending")
+    {
+        health.tunnel_reset += 1;
+        return Some((
+            "warn",
+            format!("{EVENT_PREFIX} RVPN 数据连接异常，fdu-connect 正在重新握手：{message}"),
+        ));
+    }
+    if message.contains("still connecting after")
+        || (message.contains("attempt") && message.contains("failed"))
+    {
+        health.socks_retry += 1;
+    }
+    None
 }
 
 struct Inner {
@@ -94,6 +265,8 @@ struct Inner {
     last_error: Option<String>,
     message: Option<String>,
     config: Option<CampusVpnConfig>,
+    health: Option<Arc<std::sync::Mutex<VpnHealth>>>,
+    health_task: Option<tokio::task::JoinHandle<()>>,
 }
 
 /// 校内 VPN 管理器。
@@ -120,13 +293,31 @@ impl VpnManager {
                 last_error: None,
                 message: None,
                 config: None,
+                health: None,
+                health_task: None,
             }),
         }
     }
 
     /// 当前状态。
     pub async fn status(&self, config: &CampusVpnConfig) -> VpnStatus {
-        let inner = self.inner.lock().await;
+        let mut inner = self.inner.lock().await;
+        if let Some(child) = inner.child.as_mut() {
+            if let Ok(Some(status)) = child.try_wait() {
+                let code = status
+                    .code()
+                    .map(|value| value.to_string())
+                    .unwrap_or_else(|| "signal".to_string());
+                self.logs.warn(
+                    "vpn",
+                    format!("{EVENT_PREFIX} fdu-connect 进程退出 code={code}"),
+                );
+                inner.state = "error".to_string();
+                inner.last_error = Some(format!("fdu-connect 进程退出（{status}）"));
+                inner.child = None;
+                inner.pid = None;
+            }
+        }
         VpnStatus {
             enabled: config.enabled,
             state: if !config.enabled {
@@ -273,14 +464,32 @@ impl VpnManager {
         let stderr = child.stderr.take();
         let logs = Arc::clone(&self.logs);
         let log_lines_stdout = Arc::clone(&log_lines);
+        let health: Arc<std::sync::Mutex<VpnHealth>> =
+            Arc::new(std::sync::Mutex::new(VpnHealth::default()));
+        inner.health = Some(Arc::clone(&health));
+        let health_stdout = Arc::clone(&health);
         inner.log_task = Some(tokio::spawn(async move {
             if let Some(stdout) = stdout {
                 let mut lines = BufReader::new(stdout).lines();
                 while let Ok(Some(line)) = lines.next_line().await {
-                    if vpn_log_level(&line) == "warn" {
-                        logs.warn("vpn", &line);
-                    } else {
-                        logs.info("vpn", &line);
+                    let event = {
+                        let mut guard = match health_stdout.lock() {
+                            Ok(guard) => guard,
+                            Err(poisoned) => poisoned.into_inner(),
+                        };
+                        classify_vpn_line(&line, &mut guard)
+                    };
+                    if let Some((level, message)) = event {
+                        if level == "warn" {
+                            logs.warn("vpn", message);
+                        } else {
+                            logs.info("vpn", message);
+                        }
+                    }
+                    match vpn_log_level(&line) {
+                        "error" => logs.error("vpn", &line),
+                        "warn" => logs.warn("vpn", &line),
+                        _ => logs.info("vpn", &line),
                     }
                     let mut buffer = log_lines_stdout.lock().await;
                     buffer.push(line);
@@ -306,6 +515,23 @@ impl VpnManager {
             }
         });
         inner.child = Some(child);
+
+        // 每 60s 输出一次连接健康快照，便于日志页/离线分析直接看到 KeepAlive 状态
+        let health_snapshot = Arc::clone(&health);
+        let logs_snapshot = Arc::clone(&self.logs);
+        inner.health_task = Some(tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(Duration::from_secs(60)).await;
+                let message = {
+                    let guard = match health_snapshot.lock() {
+                        Ok(guard) => guard,
+                        Err(poisoned) => poisoned.into_inner(),
+                    };
+                    guard.snapshot_line()
+                };
+                logs_snapshot.info("vpn", message);
+            }
+        }));
 
         // 等待就绪/失败（最多 45s）
         let deadline = Instant::now() + Duration::from_secs(45);
@@ -384,7 +610,15 @@ impl VpnManager {
     /// 停止校内 VPN。
     pub async fn stop(&self, config: &CampusVpnConfig) -> VpnStatus {
         let mut inner = self.inner.lock().await;
+        if let Some(health) = inner.health.as_ref() {
+            let guard = match health.lock() {
+                Ok(guard) => guard,
+                Err(poisoned) => poisoned.into_inner(),
+            };
+            self.logs.info("vpn", guard.end_line("停止/重连"));
+        }
         let _ = self.kill_child(&mut inner).await;
+        inner.health = None;
         inner.existing = false;
         inner.state = "stopped".to_string();
         inner.pid = None;
@@ -523,6 +757,9 @@ impl VpnManager {
 
     async fn kill_child(&self, inner: &mut Inner) -> CmdResult<()> {
         if let Some(task) = inner.log_task.take() {
+            task.abort();
+        }
+        if let Some(task) = inner.health_task.take() {
             task.abort();
         }
         if let Some(mut child) = inner.child.take() {
@@ -840,7 +1077,11 @@ mod tests {
                  127.0.0.1:11080->127.0.0.1:59245: read tcp 10.230.33.220:57625: \
                  connection reset by peer"
             ),
-            "warn"
+            "error"
+        );
+        assert_eq!(
+            vpn_log_level("2026/10/27 16:00:00 Initial FDU-Connect failed: cannot login"),
+            "error"
         );
         assert_eq!(
             vpn_log_level(

@@ -96,6 +96,7 @@ pub fn run() {
             commands::vpn::stop_vpn,
             commands::vpn::vpn_status,
             commands::vpn::test_vpn_connection,
+            commands::vpn::analyze_vpn_logs,
             commands::vpn::test_ssh,
             commands::system::get_snapshot,
             commands::system::get_system_info,

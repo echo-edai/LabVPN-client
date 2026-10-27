@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use labvpn_core::conn_log;
 use labvpn_core::generator::GeneratedConfig;
 use labvpn_core::ipc::Command as HelperCommand;
 use labvpn_core::rules::names;
@@ -71,6 +72,7 @@ struct Inner {
     api: Option<MihomoApi>,
     traffic_task: Option<tokio::task::JoinHandle<()>>,
     log_task: Option<tokio::task::JoinHandle<()>>,
+    conn_task: Option<tokio::task::JoinHandle<()>>,
     attached: bool,
     helper_port: u16,
     helper_token: String,
@@ -96,6 +98,7 @@ impl EngineManager {
                 api: None,
                 traffic_task: None,
                 log_task: None,
+                conn_task: None,
                 attached: false,
                 helper_port: 0,
                 helper_token: String::new(),
@@ -178,6 +181,9 @@ impl EngineManager {
             }
             inner.attached = true;
             self.logs.info("core", "已通过特权 helper 启动 TUN 核心");
+            // 尾部跟随 helper 的 core.log，把连接日志按分类写入日志页
+            let conn_path = request.workdir.join("core.log");
+            inner.conn_task = Some(spawn_connection_tail(Arc::clone(&self.logs), conn_path));
         } else {
             let core_path = request.core_path.clone().ok_or_else(|| {
                 CommandError::new(
@@ -219,7 +225,7 @@ impl EngineManager {
                 if let Some(stdout) = stdout {
                     let mut lines = BufReader::new(stdout).lines();
                     while let Ok(Some(line)) = lines.next_line().await {
-                        logs.info("core", line);
+                        push_mihomo_line(&logs, &line);
                     }
                 }
             }));
@@ -386,6 +392,9 @@ impl EngineManager {
         if let Some(task) = inner.log_task.take() {
             task.abort();
         }
+        if let Some(task) = inner.conn_task.take() {
+            task.abort();
+        }
         if let Some(pid_file) = inner.pid_file.take() {
             let _ = std::fs::remove_file(pid_file);
         }
@@ -515,6 +524,65 @@ impl EngineManager {
     fn emit_status(&self, status: &EngineStatus) {
         events::emit(&self.app, events::ENGINE_STATUS, status.clone());
     }
+}
+
+/// 把 mihomo 单行日志按「连接分类 / 普通核心日志」写入日志页。
+fn push_mihomo_line(logs: &LogStore, line: &str) {
+    if let Some(category) = conn_log::classify(line) {
+        logs.info(category.source(), line);
+    } else if line.contains("level=warning") {
+        logs.warn("core", line);
+    } else if line.contains("level=error") {
+        logs.error("core", line);
+    } else {
+        logs.info("core", line);
+    }
+}
+
+/// 尾部跟随 helper 的 `core.log`，只转发本次启动后新增的日志行。
+///
+/// TUN 模式下 mihomo 由 root helper 托管，stdout 不在 App 手里；连接日志只能从文件读取。
+fn spawn_connection_tail(logs: Arc<LogStore>, path: PathBuf) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        use tokio::io::{AsyncBufReadExt, AsyncSeekExt, BufReader};
+
+        let mut offset = std::fs::metadata(&path)
+            .map(|metadata| metadata.len())
+            .unwrap_or(0);
+        let mut buffer = String::new();
+        loop {
+            tokio::time::sleep(Duration::from_millis(400)).await;
+            let Ok(metadata) = tokio::fs::metadata(&path).await else {
+                continue;
+            };
+            let len = metadata.len();
+            if len < offset {
+                // 文件被截断/轮转
+                offset = 0;
+            }
+            if len == offset {
+                continue;
+            }
+            let Ok(file) = tokio::fs::File::open(&path).await else {
+                continue;
+            };
+            let mut reader = BufReader::new(file);
+            if reader.seek(std::io::SeekFrom::Start(offset)).await.is_err() {
+                continue;
+            }
+            loop {
+                buffer.clear();
+                match reader.read_line(&mut buffer).await {
+                    Ok(0) => break,
+                    Ok(read) => {
+                        offset += read as u64;
+                        push_mihomo_line(&logs, buffer.trim_end());
+                    }
+                    Err(_) => break,
+                }
+            }
+        }
+    })
 }
 
 /// 覆盖并删除敏感文件，降低磁盘残留风险。

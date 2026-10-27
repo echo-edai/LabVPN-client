@@ -11,12 +11,15 @@
 //! - [`subscription`]：Clash 订阅内容解析、格式识别、流量信息
 //! - [`probe`]：校园网多信号探测（含按网卡绑定以绕过第三方 TUN）
 //! - [`update`]：版本号解析/比较与 GitHub Release 挑选（纯逻辑）
+//! - [`vpn_log`]：校内 VPN 日志解析与隧道健康分析（纯逻辑）
+//! - [`conn_log`]：mihomo 连接日志分类（外网 / 校园网 / 直连 / SSH，纯逻辑）
 //! - [`util`]：通用工具（脱敏、哈希、IP/CIDR 解析等）
 
 #![cfg_attr(not(test), deny(clippy::unwrap_used))]
 #![warn(missing_docs)]
 
 pub mod config;
+pub mod conn_log;
 pub mod error;
 pub mod generator;
 pub mod ipc;
@@ -25,6 +28,7 @@ pub mod rules;
 pub mod subscription;
 pub mod update;
 pub mod util;
+pub mod vpn_log;
 
 pub use config::AppConfig;
 pub use error::{CoreError, CoreResult};

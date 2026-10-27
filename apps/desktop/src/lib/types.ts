@@ -462,6 +462,31 @@ export interface ConnectOutcome {
   warnings: string[];
 }
 
+
+export interface VpnFailureWindow {
+  start: string;
+  end: string;
+  durationSecs: number;
+  keepaliveFail: number;
+  dialErrors: number;
+}
+
+export interface VpnLogAnalysis {
+  totalLines: number;
+  sessions: number;
+  keepaliveOk: number;
+  keepaliveFail: number;
+  successRate: number;
+  reauthEvents: number;
+  socksRetries: number;
+  dialErrors: number;
+  connectionResets: number;
+  tunnelResets: number;
+  failureWindows: VpnFailureWindow[];
+  topErrors: [string, number][];
+  findings: string[];
+}
+
 export interface VpnTestResult {
   ok: boolean;
   message: string;

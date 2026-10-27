@@ -95,3 +95,18 @@ pub async fn test_ssh(host: String, port: u16) -> CmdResult<SshTestResult> {
         }),
     }
 }
+
+/// 解析并分析校内 VPN 日志（会话 / KeepAlive / 隧道中断 / 拨号失败）。
+#[tauri::command]
+pub async fn analyze_vpn_logs(
+    state: State<'_, AppState>,
+) -> CmdResult<labvpn_core::vpn_log::VpnLogAnalysis> {
+    let path = state.paths.app_log_file.clone();
+    let text = tokio::task::spawn_blocking(move || std::fs::read_to_string(path))
+        .await
+        .map_err(|err| CommandError::new("vpn", format!("读取日志任务失败: {err}")))?
+        .map_err(|err| CommandError::new("vpn", format!("读取日志文件失败: {err}")))?;
+    // 只看最近一次连接，避免多天日志混在一起干扰判断
+    let slice = labvpn_core::vpn_log::latest_session_slice(&text);
+    Ok(labvpn_core::vpn_log::analyze_log(slice))
+}

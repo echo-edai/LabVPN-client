@@ -105,6 +105,13 @@ impl Supervisor {
         write_file(&config_path, config_yaml.as_bytes(), true)
             .map_err(|err| format!("写入核心配置失败: {err}"))?;
 
+        // 核心日志轮转：长期运行会持续追加，超过 20MB 时归档一份，避免无限增长
+        const MAX_CORE_LOG_BYTES: u64 = 20 * 1024 * 1024;
+        if let Ok(metadata) = fs::metadata(&self.log_path) {
+            if metadata.len() > MAX_CORE_LOG_BYTES {
+                let _ = fs::rename(&self.log_path, self.workdir.join("core.log.1"));
+            }
+        }
         let stdout = fs::OpenOptions::new()
             .create(true)
             .append(true)

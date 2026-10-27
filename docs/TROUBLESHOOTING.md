@@ -107,7 +107,9 @@ mihomo 按 `nameserver-policy` 用校内 DNS（`202.120.224.26`）解析 → 离
 判断校内连通性请用 TCP：`nc -z 10.134.142.226 22`、`ssh`、`curl -k https://10.x/`。
 
 「运行日志」页现在有「校内 VPN」切换页，可只看 fdu-connect 的建连 / 重试 / KeepAlive 日志；
-其中的握手超时、连接重置等错误会以 **warn** 高亮，便于定位 RVPN 侧问题。
+其中的握手超时、连接重置等错误会以 **warn** 高亮。点「分析 VPN 日志」会自动解析最近一次连接：
+KeepAlive 成功率、隧道中断窗口（起止/时长/期间失败次数）、主要错误与结论建议（例如
+「隧道被服务端/NAT 丢弃，但 fdu-connect 只在启动时授权、不会自动重新登录」）。
 
 ## 7. 与 Clash / Shadowrocket 冲突
 

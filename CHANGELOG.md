@@ -2,13 +2,27 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [0.1.13] — 未发布（main）
+## [0.1.13] — 预发布（当前）
 
 ### Added
 - **运行日志页新增来源切换**：「全部 / 校内 VPN / 核心 / 引擎 / 其他」。校内 VPN 页集中展示
   fdu-connect 的建连、重试、KeepAlive 日志，便于单独排查 RVPN 侧问题。
-- **校内 VPN 错误日志分级**：fdu-connect stdout 中的 `[E]`、`failed`、`timeout`、
-  `context deadline exceeded`、`reset by peer` 等行提升为 `warn`，在日志页直接高亮。
+- **日志分级细化**：fdu-connect 输出按内容分级——`[E]`、`panic`、登录/认证失败等记为
+  `error`；`failed`、`timeout`、`context deadline exceeded`、`reset by peer` 等重试/超时
+  记为 `warn`；在日志页可直接按级别过滤和高亮。
+- **日志保留策略**：`app.log` 按天轮转（跨天归档为 `app-YYYY-MM-DD.log`），单文件 8 MB
+  上限、归档保留 7 天，启动时自动清理过期文件；内存保留最近 2000 条。
+- **连接日志分类**：运行日志新增「连接日志」分页，按出口分为 **外网连接 / 校园网连接 /
+  直连 / SSH 连接** 四类（SSH 优先：22 端口、`ssh` 进程或 mihomo `🖥 SSH-*` 出站）。
+  TUN 模式下 App 会跟随 helper 的 `core.log` 实时转发新增连接日志；helper 的 `core.log`
+  超过 20 MB 时自动归档，避免长期运行无限增长。
+- **结构化 VPN 连接日志**：新增 `[VPN事件]` 事件行，覆盖会话开始/结束、TWFID 授权、登录成功、
+  Server session ID、KeepAlive 成功/失败、隧道中断与恢复、RVPN 数据连接重连、fdu-connect
+  进程退出，以及每 60 秒一次的健康巡检快照。
+- **「分析 VPN 日志」**：运行日志 → 校内 VPN →「分析 VPN 日志」，自动解析**最近一次连接**，
+  输出 KeepAlive 成功率、隧道中断窗口（起止/时长/期间拨号失败次数）、主要错误类型与结论建议
+  （例如「隧道被服务端/NAT 丢弃但 fdu-connect 不会自动重新登录」）。纯解析逻辑位于
+  `labvpn-core::vpn_log` 并带单测。
 
 ### Docs
 - 补充「为什么 `ping 10.x` 不通、但 SSH 可用」：ICMP 不会进入校内 VPN 的 SOCKS5 隧道，
