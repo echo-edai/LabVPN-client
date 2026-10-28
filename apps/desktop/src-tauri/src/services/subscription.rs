@@ -286,7 +286,7 @@ pub fn save_profile(paths: &AppPaths, content: &str) -> CmdResult<()> {
 /// 从配置生成展示信息。
 pub fn info_from_config(paths: &AppPaths, config: &SubscriptionConfig) -> SubscriptionInfo {
     let cache_exists = paths.profile_file.exists();
-    SubscriptionInfo {
+    let mut info = SubscriptionInfo {
         enabled: config.enabled,
         name: config.name.clone(),
         url_masked: redact_url(&config.url),
@@ -303,7 +303,18 @@ pub fn info_from_config(paths: &AppPaths, config: &SubscriptionConfig) -> Subscr
         },
         format: None,
         proxy_names: Vec::new(),
+    };
+    // 以本地缓存为准展示节点数：config.proxy_count 可能是旧值（切换订阅后未及时刷新），
+    // 直接读取缓存可避免 UI 显示“订阅1 + 订阅2”合并后的节点数。
+    if let Ok(content) = std::fs::read_to_string(&paths.profile_file) {
+        if let Ok(summary) = labvpn_core::subscription::summarize(&content) {
+            info.proxy_count = summary.proxy_count;
+            info.group_count = summary.group_count;
+            info.proxy_names = summary.proxy_names;
+            info.format = Some(summary.format.label_zh().to_string());
+        }
     }
+    info
 }
 
 /// 导入订阅：拉取 → 校验格式 → 缓存 → 写回配置。
@@ -347,6 +358,8 @@ pub async fn import(
             ),
         ));
     }
+    let previous_content = std::fs::read_to_string(&state.paths.profile_file).ok();
+    let content_changed = previous_content.as_deref() != Some(result.content.as_str());
     if persist {
         save_profile(&state.paths, &result.content)?;
     }
@@ -377,6 +390,18 @@ pub async fn import(
             info.proxy_count, info.group_count
         ),
     );
+    // 运行中切换/更新订阅：立即重建核心，让新订阅生效（否则 mihomo 仍用旧 provider 缓存）
+    if persist && content_changed && state.engine.is_running().await {
+        match Box::pin(crate::services::orchestrator::apply_config(state)).await {
+            Ok(_) => state
+                .logs
+                .info("subscription", "订阅内容已变化，核心已重载"),
+            Err(err) => state.logs.warn(
+                "subscription",
+                format!("订阅内容已变化，但重载核心失败：{err}"),
+            ),
+        }
+    }
     Ok(info)
 }
 

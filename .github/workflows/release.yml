@@ -162,6 +162,8 @@ jobs:
             跨平台自动分流客户端：复旦校内 VPN + 机场订阅 + 公网 SSH 一体化。
 
             ### 本版更新
+            - **修复切换订阅不生效/节点串在一起**：连接时用最新导入缓存覆盖 mihomo provider 缓存，
+              订阅内容变化自动重载核心；节点数从本地缓存真实解析，不再显示旧订阅节点数
             - **TCP KeepAlive 探测 + 精确自动重启**：不再使用 UDP DNS KeepAlive，每 60s 通过
               fdu-connect SOCKS5 做 TCP 探测（默认 223.5.5.5:53，可配置探测 IP/端口）；只有连续
               3 次 TCP 失败才重启 fdu-connect，避免 UDP 抖动误重启打断 SSH/VS Code 连接

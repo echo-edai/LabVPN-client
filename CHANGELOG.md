@@ -2,7 +2,16 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [0.1.18] — 预发布（当前）
+## [0.1.19] — 预发布（当前）
+
+### Fixed
+- **切换订阅不生效 / 两个订阅节点“串在一起”**：mihomo 的 http proxy-provider 启动时优先读取
+  `providers/sub.yaml` 旧缓存，切换订阅后仍继续使用旧订阅节点。现在每次连接都会用本地最新
+  导入的订阅缓存覆盖 provider 缓存；导入/刷新且内容变化时自动重载核心，确保只使用当前订阅。
+- **订阅页节点数与实际使用不一致**：节点数/格式改为从本地缓存实时解析（不再信任可能过期的
+  `config.proxyCount`）；导入订阅后前端不再用旧配置快照覆盖后端刚写入的 URL、节点数、更新时间。
+
+## [0.1.18] — 已发布（2026-10-28）
 
 ### Changed
 - **KeepAlive 改为 TCP 探测**：禁用 fdu-connect 内置的 UDP DNS KeepAlive，改由 LabVPN

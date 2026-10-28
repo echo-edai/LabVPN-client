@@ -41,17 +41,22 @@ export function SetupSubscription() {
     setUsage(trafficUsage(config.subscription.traffic));
   }, [config]);
 
-  const persistSubscriptionPrefs = async () => {
-    if (!config) return false;
+  const persistSubscriptionPrefs = async (options?: { preserveRemoteDecision?: boolean }) => {
+    // 导入订阅时后端已经写入了最新的 url/节点数/更新时间；必须基于**最新**的 config，
+    // 否则用旧的闭包快照会把这些字段覆盖回旧值（会出现“显示 46 个节点但实际用旧节点”）。
+    const latest = useAppStore.getState().config ?? config;
+    if (!latest) return false;
     return saveConfig({
-      ...config,
+      ...latest,
       subscription: {
-        ...config.subscription,
+        ...latest.subscription,
         enabled: subEnabled && url.trim().length > 0,
         url: url.trim(),
-        name: name.trim() || config.subscription.name,
+        name: name.trim() || latest.subscription.name,
         updateIntervalHours: autoUpdate,
-        useRemoteProvider: remoteProvider,
+        useRemoteProvider: options?.preserveRemoteDecision
+          ? latest.subscription.useRemoteProvider
+          : remoteProvider,
         fetchMode,
         fetchProxy: fetchProxy.trim() ? fetchProxy.trim() : null,
       },
@@ -147,7 +152,7 @@ export function SetupSubscription() {
                 loading={busy === "subscription"}
                 onClick={async () => {
                   const ok = await importSubscription(url.trim(), name.trim() || undefined);
-                  if (ok) await persistSubscriptionPrefs();
+                  if (ok) await persistSubscriptionPrefs({ preserveRemoteDecision: true });
                 }}
                 disabled={!url.trim()}
               >

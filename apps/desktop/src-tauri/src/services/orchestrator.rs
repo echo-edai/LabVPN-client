@@ -399,6 +399,14 @@ async fn build_runtime(
                 && (config.subscription.url.starts_with("http://")
                     || config.subscription.url.starts_with("https://"));
             if remote_possible {
+                // mihomo 的 http proxy-provider 启动时会先读 ./providers/sub.yaml 缓存，
+                // 只有 interval 到期后才联网更新。切换订阅后如果缓存还是旧订阅内容，
+                // 就会继续使用旧节点（看起来像“两个订阅串在一起”）。
+                // 这里把本地最新导入的订阅缓存作为资产写入工作目录，启动时覆盖旧缓存，
+                // 保证当前使用的就是最近一次导入的订阅；远端更新仍按 interval 进行。
+                if let Ok(content) = std::fs::read_to_string(&state.paths.profile_file) {
+                    assets.push(("providers/sub.yaml".to_string(), content));
+                }
                 ProfileSource::Remote
             } else if state.paths.profile_file.exists() {
                 if let Ok(content) = std::fs::read_to_string(&state.paths.profile_file) {
