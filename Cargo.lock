@@ -2158,7 +2158,7 @@ dependencies = [
 
 [[package]]
 name = "labvpn-core"
-version = "0.1.16"
+version = "0.1.17"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -2176,7 +2176,7 @@ dependencies = [
 
 [[package]]
 name = "labvpn-desktop"
-version = "0.1.16"
+version = "0.1.17"
 dependencies = [
  "aes-gcm",
  "base64 0.22.1",
@@ -2202,7 +2202,7 @@ dependencies = [
 
 [[package]]
 name = "labvpn-helper"
-version = "0.1.16"
+version = "0.1.17"
 dependencies = [
  "chrono",
  "labvpn-core",

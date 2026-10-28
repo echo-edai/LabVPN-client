@@ -164,6 +164,15 @@ impl EngineManager {
         if request.mode == EngineMode::Tun {
             let assets: std::collections::BTreeMap<String, String> =
                 request.assets.iter().cloned().collect();
+            // 上次 App 实例 / 异常退出可能在 helper 中留下了仍存活的核心；直接 StartCore 会
+            // 返回「核心已在运行，请先停止」，使重启后的 App 永远连不上。启动前先无条件
+            // StopCore（没有核心时 helper 会返回错误，忽略即可）。
+            let _ = helper::request(
+                request.helper_port,
+                &request.helper_token,
+                HelperCommand::StopCore,
+            )
+            .await;
             if let Err(err) = helper::request(
                 request.helper_port,
                 &request.helper_token,
@@ -398,7 +407,7 @@ impl EngineManager {
         if let Some(pid_file) = inner.pid_file.take() {
             let _ = std::fs::remove_file(pid_file);
         }
-        if inner.attached && !inner.helper_token.is_empty() && inner.helper_port != 0 {
+        if !inner.helper_token.is_empty() && inner.helper_port != 0 {
             let port = inner.helper_port;
             let token = inner.helper_token.clone();
             if let Err(err) = helper::request(port, &token, HelperCommand::StopCore).await {
