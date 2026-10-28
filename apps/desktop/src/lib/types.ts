@@ -211,6 +211,8 @@ export interface EngineConfig {
   ipv6: boolean;
   logLevel: string;
   connectOnLaunch: boolean;
+  /** 连接前自动关闭本机其他代理程序 */
+  closeOtherProxies: boolean;
 }
 
 export interface UiConfig {

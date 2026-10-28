@@ -355,6 +355,8 @@ export const zhCN = {
   "settings.systemProxy": "同时设置系统代理",
   "settings.allowLan": "允许局域网设备接入",
   "settings.ipv6": "启用 IPv6",
+  "settings.closeOtherProxies": "连接前关闭其他代理程序",
+  "settings.closeOtherProxiesHint": "自动退出 Clash Verge / ClashX / V2rayU / Shadowrocket / sing-box 等正在运行的代理，避免它们占用系统代理或端口（会关闭这些程序）。",
   "settings.logLevel": "日志级别",
   "settings.helper": "特权服务（TUN）",
   "settings.helperDesc": "TUN 模式需要以管理员身份运行 mihomo。LabVPN 通过独立的特权 helper 完成，核心逻辑仍由你控制。",

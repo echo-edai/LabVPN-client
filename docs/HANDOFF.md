@@ -5,7 +5,7 @@
 ## 当前状态
 
 - **公开仓库**：<https://github.com/echo-edai/LabVPN-client>（全新对象存储的干净历史）
-- **最新版本**：`v0.1.15`（预发布；核心自动恢复 + 出口网卡显式绑定 + 隧道中断自动重启 + 日志分析）
+- **最新版本**：`v0.1.16`（预发布；连接前关闭其他代理 + 窗口恢复修复 + 核心自动恢复 + 出口网卡显式绑定）
   - 修复 Apple Silicon（M 系列）从 Release 下载后提示「已损坏」的问题：macOS 无证书时自动 ad-hoc 签名
   - 资产：macOS ARM/Intel dmg、Windows exe/msi、Ubuntu deb/AppImage、AlmaLinux rpm、fdu-connect 源码归档
 - 本机 App：v0.1.13 已构建、ad-hoc 签名并运行中
@@ -99,5 +99,5 @@ OLD_REMOTE=<远端 main sha> BASE_LOCAL=<上次推送的本地提交> NEW_LOCAL=
 ## 关键链接
 
 - 仓库：<https://github.com/echo-edai/LabVPN-client>
-- Release：<https://github.com/echo-edai/LabVPN-client/releases/tag/v0.1.15>
+- Release：<https://github.com/echo-edai/LabVPN-client/releases/tag/v0.1.16>
 - 旧仓库（私有归档）：`echo-edai/LabVPN-client-archive`

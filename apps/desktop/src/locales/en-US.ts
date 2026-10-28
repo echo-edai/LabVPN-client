@@ -233,6 +233,8 @@ export const enUS: Partial<Record<MessageKey, string>> = {
   "settings.systemProxy": "Set system proxy too",
   "settings.allowLan": "Allow LAN devices",
   "settings.ipv6": "Enable IPv6",
+  "settings.closeOtherProxies": "Close other proxies before connecting",
+  "settings.closeOtherProxiesHint": "Automatically quit running proxies such as Clash Verge / ClashX / V2rayU / Shadowrocket / sing-box so they cannot take over the system proxy or ports (these apps will be closed).",
   "settings.logLevel": "Log level",
   "settings.helper": "Privileged helper (TUN)",
   "settings.helperInstall": "Install helper",

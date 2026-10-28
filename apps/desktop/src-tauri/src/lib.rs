@@ -120,9 +120,21 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("构建 LabVPN 失败")
         .run(|app, event| {
+            // macOS：点击 Dock 图标时若没有可见窗口（窗口被关闭按钮隐藏到托盘/菜单栏），
+            // 重新显示主窗口。没有这段处理时，窗口隐藏后点 Dock 图标会“没反应”。
+            #[cfg(target_os = "macos")]
+            if let RunEvent::Reopen {
+                has_visible_windows,
+                ..
+            } = &event
+            {
+                if !*has_visible_windows {
+                    show_main_window(app);
+                }
+            }
             // 退出时务必断开核心并关闭系统代理，避免留下指向已停止端口的代理设置；
             // 同时覆盖托盘「退出」（app.exit）与窗口全部关闭两种路径，只执行一次。
-            if matches!(event, RunEvent::ExitRequested { .. } | RunEvent::Exit) {
+            if matches!(&event, RunEvent::ExitRequested { .. } | RunEvent::Exit) {
                 if EXIT_CLEANED.swap(true, std::sync::atomic::Ordering::SeqCst) {
                     return;
                 }
@@ -197,9 +209,16 @@ fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
 
 fn show_main_window(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
+        // show() 对已隐藏窗口有效；unminimize() 处理最小化；最后 set_focus 激活应用
         let _ = window.show();
         let _ = window.unminimize();
         let _ = window.set_focus();
+        let _ = window.set_always_on_top(false);
+    } else if let Some(state) = app.try_state::<AppState>() {
+        state.logs.warn(
+            "window",
+            "主窗口不存在，无法显示：请从托盘菜单退出后重新打开 LabVPN",
+        );
     }
 }
 

@@ -2,7 +2,21 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [0.1.15] — 预发布（当前）
+## [0.1.16] — 预发布（当前）
+
+### Added
+- **连接前关闭其他代理程序**（设置 → 引擎，默认开启）：连接 LabVPN 前自动识别并退出
+  Clash Verge / ClashX / Mihomo Party / Clash Nyanpasu / FlClash / V2rayU / Hiddify /
+  sing-box / Shadowrocket / Surge / Quantumult X / Stash / Loon / ShadowsocksX-NG 等已知代理，
+  避免它们占用系统代理或 7890/7891/7897 等端口，导致「LabVPN 已连接但流量没被接管」。
+  只匹配白名单进程、显式排除 LabVPN 自身，日志页出现 `[proxy-guard] 已关闭其他代理：...`，
+  连接结果警告里也会列出被关闭的程序；可在设置中关闭该行为。
+
+### Fixed
+- **窗口隐藏后点击 Dock 图标无法恢复**：之前只处理了托盘图标点击，没有处理 macOS
+  的 `RunEvent::Reopen`；现在点击 Dock 图标会在无可见窗口时重新 `show + unminimize + focus`。
+
+## [0.1.15] — 已发布（2026-10-28）
 
 ### Added
 - **核心自动恢复**：每 15 秒探测 mihomo 控制端口；当 App 仍显示「已连接」但核心实际已退出

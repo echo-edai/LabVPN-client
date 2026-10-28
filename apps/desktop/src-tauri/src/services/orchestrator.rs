@@ -55,6 +55,23 @@ pub async fn connect(state: &AppState) -> CmdResult<ConnectResult> {
     // 0) 清理上次异常退出遗留的核心（避免端口被自己的旧进程占用）
     crate::services::engine::cleanup_stale_core(&state.paths.core_dir);
 
+    // 0.2) 可选：关闭本机其他代理程序，避免它们抢占系统代理/端口，导致流量不由 LabVPN 接管
+    if config.engine.close_other_proxies {
+        if crate::services::proxy_guard::supported() {
+            let closed = crate::services::proxy_guard::close_other_proxies(&state.logs).await;
+            if !closed.is_empty() {
+                for name in &closed {
+                    state
+                        .logs
+                        .info("orchestrator", format!("已关闭其他代理：{name}"));
+                }
+                warnings.push(format!("已关闭其他代理：{}", closed.join("、")));
+            }
+        } else {
+            warnings.push("当前平台暂不支持自动关闭其他代理程序".to_string());
+        }
+    }
+
     // 0.5) 端口冲突自动避让（Clash Verge / Shadowrocket / 其他 mihomo 常占用 7897）
     if !state.engine.is_running().await {
         choose_ports(&mut config, &mut warnings);

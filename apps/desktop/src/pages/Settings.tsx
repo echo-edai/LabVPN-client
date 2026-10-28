@@ -300,6 +300,17 @@ export function Settings() {
                   onChange={(ipv6) => patch((current) => ({ ...current, engine: { ...current.engine, ipv6 } }))}
                   label={t("settings.ipv6")}
                 />
+                <Switch
+                  checked={draft.engine.closeOtherProxies}
+                  onChange={(closeOtherProxies) =>
+                    patch((current) => ({
+                      ...current,
+                      engine: { ...current.engine, closeOtherProxies },
+                    }))
+                  }
+                  label={t("settings.closeOtherProxies")}
+                  description={t("settings.closeOtherProxiesHint")}
+                />
                 <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-card px-3 py-2">
                   <span className="text-[11.5px] text-ink-muted">{t("status.systemProxyOn")}</span>
                   <div className="flex gap-1">

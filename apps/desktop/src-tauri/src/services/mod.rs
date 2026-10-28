@@ -8,6 +8,7 @@ pub mod helper;
 pub mod logs;
 pub mod mihomo_api;
 pub mod orchestrator;
+pub mod proxy_guard;
 pub mod secrets;
 pub mod stats;
 pub mod subscription;

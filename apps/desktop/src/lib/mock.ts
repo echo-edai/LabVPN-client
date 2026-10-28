@@ -147,6 +147,7 @@ function defaultConfig(): AppConfig {
       ipv6: false,
       logLevel: "info",
       connectOnLaunch: false,
+      closeOtherProxies: true,
     },
     ui: {
       theme: "dark",

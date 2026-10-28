@@ -696,6 +696,8 @@ pub struct EngineConfig {
     pub log_level: String,
     /// 启动时自动连接
     pub connect_on_launch: bool,
+    /// 连接前自动关闭本机其他代理程序（避免它们抢占系统代理/端口）
+    pub close_other_proxies: bool,
 }
 
 impl Default for EngineConfig {
@@ -710,6 +712,7 @@ impl Default for EngineConfig {
             ipv6: false,
             log_level: "info".to_string(),
             connect_on_launch: false,
+            close_other_proxies: true,
         }
     }
 }
