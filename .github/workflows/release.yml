@@ -162,6 +162,9 @@ jobs:
             跨平台自动分流客户端：复旦校内 VPN + 机场订阅 + 公网 SSH 一体化。
 
             ### 本版更新
+            - **TCP KeepAlive 探测 + 精确自动重启**：不再使用 UDP DNS KeepAlive，每 60s 通过
+              fdu-connect SOCKS5 做 TCP 探测（默认 223.5.5.5:53，可配置探测 IP/端口）；只有连续
+              3 次 TCP 失败才重启 fdu-connect，避免 UDP 抖动误重启打断 SSH/VS Code 连接
             - **连接前关闭其他代理**（默认开启）：自动退出 Clash Verge / ClashX / V2rayU /
               Shadowrocket 等已知代理，防止它们占用系统代理/端口，确保流量由 LabVPN 接管
             - **修复窗口隐藏后点 Dock 图标无法恢复**：补上 macOS Reopen 事件处理

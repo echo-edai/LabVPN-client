@@ -306,6 +306,10 @@ pub struct CampusVpnConfig {
     pub disable_fdu_config: bool,
     /// 禁用复旦 DNS（透传 fdu-connect）
     pub disable_fdu_dns: bool,
+    /// TCP KeepAlive 探测终点（默认 223.5.5.5；53 端口会发 TCP DNS 查询做真实往返）
+    pub keepalive_host: String,
+    /// TCP KeepAlive 探测端口（默认 53）
+    pub keepalive_port: u16,
 }
 
 impl Default for CampusVpnConfig {
@@ -330,6 +334,8 @@ impl Default for CampusVpnConfig {
             proxy_all: true,
             disable_fdu_config: false,
             disable_fdu_dns: false,
+            keepalive_host: "223.5.5.5".to_string(),
+            keepalive_port: 53,
         }
     }
 }

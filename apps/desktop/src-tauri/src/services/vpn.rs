@@ -264,17 +264,173 @@ const AUTO_RESTART_WINDOW: Duration = Duration::from_secs(30 * 60);
 /// 窗口内最多自动重启次数。
 const AUTO_RESTART_MAX_PER_WINDOW: usize = 3;
 
-/// 连接健康快照。
-#[derive(Debug, Clone, Default)]
-pub struct VpnHealthReport {
-    /// KeepAlive 成功次数
-    pub keepalive_ok: u64,
-    /// KeepAlive 失败次数
-    pub keepalive_fail: u64,
-    /// 当前连续失败次数
-    pub fail_streak: u64,
-    /// 隧道已中断秒数（当前连续失败开始时计）
-    pub tunnel_down_secs: Option<u64>,
+/// TCP KeepAlive 探测状态（通过 fdu-connect SOCKS5 做真实 TCP 探测）。
+#[derive(Default)]
+struct TcpHealth {
+    /// 探测成功次数
+    ok: u64,
+    /// 探测失败次数
+    fail: u64,
+    /// 连续失败次数
+    fail_streak: u64,
+    /// 上次探测时间
+    last_probe: Option<Instant>,
+    /// 连续失败开始时间
+    down_since: Option<Instant>,
+    /// 最近一次错误
+    last_error: Option<String>,
+}
+
+/// TCP KeepAlive 探测间隔。
+const TCP_KEEPALIVE_INTERVAL: Duration = Duration::from_secs(60);
+/// 单次探测总超时（fdu-connect 内部 SOCKS 宽限最长 20s，外加余量）。
+const TCP_KEEPALIVE_TIMEOUT: Duration = Duration::from_secs(25);
+
+/// 构造 DNS A 查询（TCP DNS 探测用，纯函数便于单测）。
+fn build_dns_query(host: &str) -> Vec<u8> {
+    let mut query = Vec::with_capacity(64);
+    query.extend_from_slice(&[0x4c, 0x56]); // ID
+    query.extend_from_slice(&[0x01, 0x00]); // 标准查询，递归期望
+    query.extend_from_slice(&[0x00, 0x01]); // QDCOUNT = 1
+    query.extend_from_slice(&[0x00, 0x00]); // ANCOUNT
+    query.extend_from_slice(&[0x00, 0x00]); // NSCOUNT
+    query.extend_from_slice(&[0x00, 0x00]); // ARCOUNT
+    for label in host.split('.') {
+        let bytes = label.as_bytes();
+        query.push(bytes.len() as u8);
+        query.extend_from_slice(bytes);
+    }
+    query.push(0);
+    query.extend_from_slice(&[0x00, 0x01]); // QTYPE A
+    query.extend_from_slice(&[0x00, 0x01]); // QCLASS IN
+    query
+}
+
+/// 通过 fdu-connect 的 SOCKS5 端口做 TCP KeepAlive 探测。
+///
+/// - `port == 53`：发送 TCP DNS 查询并等待应答（推荐，能真实验证隧道数据面）；
+/// - 其它端口：完成 SOCKS5 CONNECT 后等待 2 秒，若对端未立即关闭则视为可用（近似判断）。
+async fn probe_tcp_via_socks(socks_port: u16, host: &str, port: u16) -> Result<u64, String> {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let started = Instant::now();
+    let mut stream = tokio::time::timeout(
+        Duration::from_secs(3),
+        tokio::net::TcpStream::connect(("127.0.0.1", socks_port)),
+    )
+    .await
+    .map_err(|_| "连接本地 SOCKS5 超时".to_string())?
+    .map_err(|err| format!("连接本地 SOCKS5 失败（fdu-connect 未就绪）：{err}"))?;
+
+    // SOCKS5 无认证握手
+    let mut write = stream.write_all(&[0x05, 0x01, 0x00]);
+    tokio::time::timeout(Duration::from_secs(3), write)
+        .await
+        .map_err(|_| "SOCKS5 握手写超时".to_string())?
+        .map_err(|err| format!("SOCKS5 握手写失败：{err}"))?;
+    let mut greeting = [0u8; 2];
+    tokio::time::timeout(Duration::from_secs(3), stream.read_exact(&mut greeting))
+        .await
+        .map_err(|_| "SOCKS5 握手读超时".to_string())?
+        .map_err(|err| format!("SOCKS5 握手读失败：{err}"))?;
+    if greeting != [0x05, 0x00] {
+        return Err(format!("SOCKS5 不支持无认证（{greeting:02x?}）"));
+    }
+
+    // CONNECT 请求
+    let mut request = vec![0x05, 0x01, 0x00];
+    if let Ok(ipv4) = host.parse::<std::net::Ipv4Addr>() {
+        request.push(0x01);
+        request.extend_from_slice(&ipv4.octets());
+    } else if let Ok(ipv6) = host.parse::<std::net::Ipv6Addr>() {
+        request.push(0x04);
+        request.extend_from_slice(&ipv6.octets());
+    } else {
+        let domain = host.as_bytes();
+        if domain.is_empty() || domain.len() > 255 {
+            return Err("探测终点不是合法 IP/域名".to_string());
+        }
+        request.push(0x03);
+        request.push(domain.len() as u8);
+        request.extend_from_slice(domain);
+    }
+    request.extend_from_slice(&port.to_be_bytes());
+    write = stream.write_all(&request);
+    tokio::time::timeout(Duration::from_secs(3), write)
+        .await
+        .map_err(|_| "SOCKS5 CONNECT 写超时".to_string())?
+        .map_err(|err| format!("SOCKS5 CONNECT 写失败：{err}"))?;
+
+    // 读 CONNECT 应答（fdu-connect 可能宽限 2s 后先回成功）
+    let mut head = [0u8; 4];
+    tokio::time::timeout(TCP_KEEPALIVE_TIMEOUT, stream.read_exact(&mut head))
+        .await
+        .map_err(|_| "SOCKS5 CONNECT 应答超时（隧道数据面可能中断）".to_string())?
+        .map_err(|err| format!("SOCKS5 CONNECT 应答失败：{err}"))?;
+    if head[0] != 0x05 || head[1] != 0x00 {
+        return Err(format!("SOCKS5 CONNECT 被拒绝（rep={}）", head[1]));
+    }
+    let skip = match head[3] {
+        0x01 => 4usize,
+        0x04 => 16usize,
+        0x03 => {
+            let mut len = [0u8; 1];
+            tokio::time::timeout(Duration::from_secs(3), stream.read_exact(&mut len))
+                .await
+                .map_err(|_| "SOCKS5 应答读超时".to_string())?
+                .map_err(|err| format!("SOCKS5 应答读失败：{err}"))?;
+            len[0] as usize
+        }
+        _ => return Err(format!("SOCKS5 应答地址类型未知（{}）", head[3])),
+    };
+    let mut tail = vec![0u8; skip + 2];
+    tokio::time::timeout(Duration::from_secs(3), stream.read_exact(&mut tail))
+        .await
+        .map_err(|_| "SOCKS5 应答读超时".to_string())?
+        .map_err(|err| format!("SOCKS5 应答读失败：{err}"))?;
+
+    if port == 53 {
+        // 真实数据往返：TCP DNS 查询
+        let query = build_dns_query("www.baidu.com");
+        let mut framed = Vec::with_capacity(query.len() + 2);
+        framed.extend_from_slice(&(query.len() as u16).to_be_bytes());
+        framed.extend_from_slice(&query);
+        tokio::time::timeout(TCP_KEEPALIVE_TIMEOUT, stream.write_all(&framed))
+            .await
+            .map_err(|_| "TCP DNS 查询写超时（隧道数据面可能中断）".to_string())?
+            .map_err(|err| format!("TCP DNS 查询写失败：{err}"))?;
+        let mut len_buf = [0u8; 2];
+        tokio::time::timeout(TCP_KEEPALIVE_TIMEOUT, stream.read_exact(&mut len_buf))
+            .await
+            .map_err(|_| "TCP DNS 应答超时（隧道数据面可能中断）".to_string())?
+            .map_err(|err| format!("TCP DNS 应答读失败：{err}"))?;
+        let length = u16::from_be_bytes(len_buf) as usize;
+        if !(12..=4096).contains(&length) {
+            return Err(format!("TCP DNS 应答长度异常（{length}）"));
+        }
+        let mut response = vec![0u8; length];
+        tokio::time::timeout(Duration::from_secs(5), stream.read_exact(&mut response))
+            .await
+            .map_err(|_| "TCP DNS 应答内容超时".to_string())?
+            .map_err(|err| format!("TCP DNS 应答内容读失败：{err}"))?;
+        let rcode = response[3] & 0x0f;
+        let answers = u16::from_be_bytes([response[6], response[7]]);
+        if rcode != 0 {
+            return Err(format!("TCP DNS 返回错误码 {rcode}"));
+        }
+        if answers == 0 {
+            return Err("TCP DNS 无应答记录".to_string());
+        }
+    } else {
+        // 其它端口：等待 2 秒，若被关闭则视为失败
+        let mut probe = [0u8; 1];
+        match tokio::time::timeout(Duration::from_secs(2), stream.read(&mut probe)).await {
+            Ok(Ok(0)) => return Err("TCP 探测目标已关闭连接".to_string()),
+            Ok(Err(err)) => return Err(format!("TCP 探测读失败：{err}")),
+            _ => {}
+        }
+    }
+    Ok(started.elapsed().as_millis() as u64)
 }
 
 /// 自动重启的并发保护与频率记录。
@@ -311,6 +467,8 @@ struct Inner {
     config: Option<CampusVpnConfig>,
     health: Option<Arc<std::sync::Mutex<VpnHealth>>>,
     health_task: Option<tokio::task::JoinHandle<()>>,
+    /// TCP KeepAlive 探测状态（fdu-connect 的 UDP KeepAlive 已禁用）
+    tcp_health: Arc<std::sync::Mutex<TcpHealth>>,
 }
 
 /// 校内 VPN 管理器。
@@ -341,6 +499,7 @@ impl VpnManager {
                 config: None,
                 health: None,
                 health_task: None,
+                tcp_health: Arc::new(std::sync::Mutex::new(TcpHealth::default())),
             }),
         }
     }
@@ -384,23 +543,88 @@ impl VpnManager {
         }
     }
 
-    /// 当前连接健康快照（供自动重启与诊断使用）。
-    pub async fn health(&self) -> VpnHealthReport {
+    /// TCP KeepAlive 探测状态快照（ok, fail, fail_streak, down_since）。
+    async fn tcp_health_snapshot(&self) -> (u64, u64, u64, Option<Instant>) {
         let inner = self.inner.lock().await;
-        let Some(health) = inner.health.as_ref() else {
-            return VpnHealthReport::default();
-        };
-        let guard = match health.lock() {
+        let health = match inner.tcp_health.lock() {
             Ok(guard) => guard,
             Err(poisoned) => poisoned.into_inner(),
         };
-        VpnHealthReport {
-            keepalive_ok: guard.keepalive_ok,
-            keepalive_fail: guard.keepalive_fail,
-            fail_streak: guard.fail_streak,
-            tunnel_down_secs: guard
-                .tunnel_down_since
-                .map(|since| since.elapsed().as_secs()),
+        (
+            health.ok,
+            health.fail,
+            health.fail_streak,
+            health.down_since,
+        )
+    }
+
+    /// 每 60 秒做一次 TCP KeepAlive 探测（通过 fdu-connect SOCKS5）。
+    ///
+    /// 只在 VPN 处于 running 状态时探测；结果写入日志并驱动自动重启。
+    pub async fn tcp_keepalive_tick(&self) {
+        let (config, health, socks_port) = {
+            let inner = self.inner.lock().await;
+            if inner.state != "running" {
+                return;
+            }
+            let Some(config) = inner.config.clone() else {
+                return;
+            };
+            (
+                config.clone(),
+                Arc::clone(&inner.tcp_health),
+                config.socks_port,
+            )
+        };
+        {
+            let mut guard = match health.lock() {
+                Ok(guard) => guard,
+                Err(poisoned) => poisoned.into_inner(),
+            };
+            if let Some(last) = guard.last_probe {
+                if last.elapsed() < TCP_KEEPALIVE_INTERVAL {
+                    return;
+                }
+            }
+            guard.last_probe = Some(Instant::now());
+        }
+        let target = format!("{}:{}", config.keepalive_host, config.keepalive_port);
+        let result =
+            probe_tcp_via_socks(socks_port, &config.keepalive_host, config.keepalive_port).await;
+        let mut guard = match health.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        match result {
+            Ok(elapsed_ms) => {
+                guard.ok += 1;
+                guard.fail_streak = 0;
+                guard.down_since = None;
+                guard.last_error = None;
+                drop(guard);
+                self.logs.info(
+                    "vpn",
+                    format!("{EVENT_PREFIX} TCP KeepAlive 成功（{target}，{elapsed_ms}ms）"),
+                );
+            }
+            Err(err) => {
+                guard.fail += 1;
+                guard.fail_streak += 1;
+                if guard.down_since.is_none() {
+                    guard.down_since = Some(Instant::now());
+                }
+                guard.last_error = Some(err.clone());
+                let streak = guard.fail_streak;
+                let fail = guard.fail;
+                let ok = guard.ok;
+                drop(guard);
+                self.logs.warn(
+                    "vpn",
+                    format!(
+                        "{EVENT_PREFIX} TCP KeepAlive 失败（{target}，连续 {streak} 次，ok={ok} fail={fail}）：{err}"
+                    ),
+                );
+            }
         }
     }
 
@@ -414,9 +638,9 @@ impl VpnManager {
         secrets: &SecretStore,
         paths: &AppPaths,
     ) -> bool {
-        let health = self.health().await;
+        let (tcp_ok, tcp_fail, tcp_streak, down_since) = self.tcp_health_snapshot().await;
         let mut guard = self.restart_guard.lock().await;
-        if health.fail_streak == 0 {
+        if tcp_streak == 0 {
             guard.cap_logged = false;
             return false;
         }
@@ -429,19 +653,19 @@ impl VpnManager {
             inner.state == "running" && inner.child.is_some()
         };
         if !should_auto_restart(
-            health.fail_streak,
+            tcp_streak,
             if running { "running" } else { "stopped" },
             guard.history.len(),
             guard.in_progress,
         ) {
-            if health.fail_streak >= AUTO_RESTART_FAIL_THRESHOLD
+            if tcp_streak >= AUTO_RESTART_FAIL_THRESHOLD
                 && guard.history.len() >= AUTO_RESTART_MAX_PER_WINDOW
                 && !guard.cap_logged
             {
                 guard.cap_logged = true;
                 let message = format!(
-                    "{EVENT_PREFIX} KeepAlive 连续失败 {} 次，但 30 分钟内已自动重启 {} 次，暂停自动重连；请手动重连或检查网络",
-                    health.fail_streak,
+                    "{EVENT_PREFIX} TCP KeepAlive 连续失败 {} 次，但 30 分钟内已自动重启 {} 次，暂停自动重连；请手动重连或检查网络",
+                    tcp_streak,
                     guard.history.len()
                 );
                 drop(guard);
@@ -456,11 +680,13 @@ impl VpnManager {
         self.logs.warn(
             "vpn",
             format!(
-                "{EVENT_PREFIX} KeepAlive 连续失败 {} 次（keepalive_ok={} keepalive_fail={}，隧道中断约 {} 秒），自动重启 fdu-connect（等效重新授权）",
-                health.fail_streak,
-                health.keepalive_ok,
-                health.keepalive_fail,
-                health.tunnel_down_secs.unwrap_or(0)
+                "{EVENT_PREFIX} TCP KeepAlive 连续失败 {} 次（探测 {}:{}，ok={} fail={}，中断约 {} 秒），自动重启 fdu-connect（等效重新授权）",
+                tcp_streak,
+                config.keepalive_host,
+                config.keepalive_port,
+                tcp_ok,
+                tcp_fail,
+                down_since.map(|since| since.elapsed().as_secs()).unwrap_or(0)
             ),
         );
         let _ = self.stop(config).await;
@@ -473,7 +699,7 @@ impl VpnManager {
             Ok(_) => {
                 self.logs.info(
                     "vpn",
-                    format!("{EVENT_PREFIX} 自动重启完成，等待 KeepAlive 恢复"),
+                    format!("{EVENT_PREFIX} 自动重启完成，等待 TCP KeepAlive 恢复"),
                 );
                 true
             }
@@ -741,6 +967,9 @@ impl VpnManager {
         self.logs
             .info("vpn", "临时配置文件已销毁（密码不落盘留存）");
         inner.state = "running".to_string();
+        if let Ok(mut health) = inner.tcp_health.lock() {
+            *health = TcpHealth::default();
+        }
         inner.message = Some(format!(
             "校内 VPN 已连接（SOCKS 127.0.0.1:{}）",
             config.socks_port
@@ -766,6 +995,9 @@ impl VpnManager {
         }
         let _ = self.kill_child(&mut inner).await;
         inner.health = None;
+        if let Ok(mut health) = inner.tcp_health.lock() {
+            *health = TcpHealth::default();
+        }
         inner.existing = false;
         inner.state = "stopped".to_string();
         inner.pid = None;
@@ -1147,7 +1379,7 @@ dial_direct_proxy = ""
 tun_mode = false
 add_route = false
 dns_ttl = 3600
-disable_keep_alive = false
+disable_keep_alive = true
 fdu_dns_server = "202.120.224.26"
 secondary_dns_server = "223.5.5.5"
 dns_server_bind = ""
@@ -1199,12 +1431,10 @@ pub fn spawn_health_monitor(app: AppHandle) {
             tokio::time::sleep(Duration::from_secs(15)).await;
             let state = app.state::<AppState>();
             let config = state.config_snapshot();
-            if !config.campus_vpn.enabled
-                || !config.campus_vpn.managed
-                || state.vpn.health().await.fail_streak == 0
-            {
+            if !config.campus_vpn.enabled || !config.campus_vpn.managed {
                 continue;
             }
+            state.vpn.tcp_keepalive_tick().await;
             let _ = state
                 .vpn
                 .auto_restart_if_needed(&config.campus_vpn, &state.secrets, &state.paths)
@@ -1216,6 +1446,24 @@ pub fn spawn_health_monitor(app: AppHandle) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn builds_dns_query_for_tcp_probe() {
+        let query = build_dns_query("www.baidu.com");
+        // header(12) + qname(1+3 + 1+5 + 1+3 + 1 = 15) + qtype/qclass(4)
+        assert_eq!(query.len(), 31);
+        assert_eq!(query[0..2], [0x4c, 0x56]);
+        assert_eq!(query[2..4], [0x01, 0x00]);
+        assert_eq!(query[4..6], [0x00, 0x01]);
+        assert_eq!(query[12], 3);
+        assert_eq!(&query[13..16], b"www");
+        assert_eq!(query[16], 5);
+        assert_eq!(&query[17..22], b"baidu");
+        assert_eq!(query[22], 3);
+        assert_eq!(&query[23..26], b"com");
+        assert_eq!(query[26], 0);
+        assert_eq!(&query[27..31], [0x00, 0x01, 0x00, 0x01]);
+    }
 
     #[test]
     fn auto_restart_policy_thresholds() {

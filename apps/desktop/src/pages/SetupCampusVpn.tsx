@@ -36,6 +36,8 @@ interface DraftState {
   extraDomains: string;
   probeTargets: ProbeTarget[];
   campusCidrs: string;
+  keepaliveHost: string;
+  keepalivePort: number;
 }
 
 export function SetupCampusVpn() {
@@ -71,6 +73,8 @@ export function SetupCampusVpn() {
       extraDomains: config.routing.extraCampusDomains.join("\n"),
       probeTargets: config.campusVpn.probeTargets,
       campusCidrs: config.campusVpn.campusCidrs.join("\n"),
+      keepaliveHost: config.campusVpn.keepaliveHost,
+      keepalivePort: config.campusVpn.keepalivePort,
     });
   }, [config]);
 
@@ -106,6 +110,8 @@ export function SetupCampusVpn() {
             .split("\n")
             .map((line) => line.trim())
             .filter(Boolean),
+          keepaliveHost: draft.keepaliveHost.trim() || "223.5.5.5",
+          keepalivePort: draft.keepalivePort,
         },
         routing: {
           ...config.routing,
@@ -247,6 +253,23 @@ export function SetupCampusVpn() {
                   onChange={(event) => setDraft({ ...draft, serverIpOverride: event.target.value })}
                   placeholder="202.120.224.58"
                   className="font-mono text-[12px]"
+                />
+              </Field>
+              <Field label={t("setupCampus.keepaliveHost")} hint={t("setupCampus.keepaliveHint")}>
+                <TextInput
+                  value={draft.keepaliveHost}
+                  onChange={(event) => setDraft({ ...draft, keepaliveHost: event.target.value })}
+                  placeholder="223.5.5.5"
+                  className="font-mono text-[12px]"
+                />
+              </Field>
+              <Field label={t("setupCampus.keepalivePort")}>
+                <TextInput
+                  type="number"
+                  value={draft.keepalivePort}
+                  onChange={(event) =>
+                    setDraft({ ...draft, keepalivePort: Number(event.target.value) })
+                  }
                 />
               </Field>
               <div className="space-y-3 sm:col-span-2">

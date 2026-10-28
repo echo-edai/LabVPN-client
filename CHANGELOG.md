@@ -2,7 +2,19 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [0.1.17] — 预发布（当前）
+## [0.1.18] — 预发布（当前）
+
+### Changed
+- **KeepAlive 改为 TCP 探测**：禁用 fdu-connect 内置的 UDP DNS KeepAlive，改由 LabVPN
+  每 60 秒通过 fdu-connect SOCKS5 做真实 TCP 探测（默认 `223.5.5.5:53` TCP DNS，
+  端口 53 会发送 DNS 查询并等待应答；非 53 端口做近似连通性判断）。
+- **自动重启只看 TCP 探测**：连续 3 次 TCP 探测失败才重启 fdu-connect，不再因 UDP DNS
+  抖动误重启，避免打断正在工作的 SSH / VS Code Remote 连接。
+
+### Added
+- 设置 → 校内 VPN：可配置 TCP KeepAlive 探测终点 IP 与端口。
+
+## [0.1.17] — 已发布（2026-10-28）
 
 ### Fixed
 - **重启 App 后卡在「核心已在运行，请先停止」无法连接**：上一次 App 实例退出/被替换时，

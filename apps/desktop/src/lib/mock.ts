@@ -87,6 +87,8 @@ function defaultConfig(): AppConfig {
       proxyAll: true,
       disableFduConfig: false,
       disableFduDns: false,
+      keepaliveHost: "223.5.5.5",
+      keepalivePort: 53,
     },
     sshProxy: {
       enabled: true,

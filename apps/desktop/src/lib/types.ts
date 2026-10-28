@@ -61,6 +61,10 @@ export interface CampusVpnConfig {
   proxyAll: boolean;
   disableFduConfig: boolean;
   disableFduDns: boolean;
+  /** TCP KeepAlive 探测终点 IP（默认 223.5.5.5） */
+  keepaliveHost: string;
+  /** TCP KeepAlive 探测端口（53 = TCP DNS） */
+  keepalivePort: number;
 }
 
 export type SshAuthType = "password" | "privateKey";
