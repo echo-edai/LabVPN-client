@@ -4,6 +4,16 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "已存在的版本标签，例如 v0.1.20"
+        required: true
+        type: string
+      platform:
+        description: "构建平台"
+        default: all
+        type: choice
+        options: [all, macos-arm]
 
 permissions:
   contents: write
@@ -15,21 +25,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - name: macOS (Apple Silicon)
-            os: macos-14
-            args: --target aarch64-apple-darwin
-          - name: macOS (Intel)
-            os: macos-15-intel
-            args: --target x86_64-apple-darwin
-          - name: Windows
-            os: windows-latest
-            args: ""
-          - name: Linux (Ubuntu)
-            os: ubuntu-22.04
-            args: ""
+        include: ${{ fromJSON(inputs.platform == 'macos-arm' && '[{"name":"macOS (Apple Silicon)","os":"macos-15","args":"--target aarch64-apple-darwin"}]' || '[{"name":"macOS (Apple Silicon)","os":"macos-15","args":"--target aarch64-apple-darwin"},{"name":"macOS (Intel)","os":"macos-15-intel","args":"--target x86_64-apple-darwin"},{"name":"Windows","os":"windows-latest","args":""},{"name":"Linux (Ubuntu)","os":"ubuntu-22.04","args":""}]') }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - uses: actions/setup-go@v5
         with:
@@ -154,8 +154,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: apps/desktop
-          tagName: ${{ github.ref_name }}
-          releaseName: "LabVPN ${{ github.ref_name }}"
+          tagName: ${{ inputs.tag || github.ref_name }}
+          releaseName: "LabVPN ${{ inputs.tag || github.ref_name }}"
           releaseBody: |
             ## LabVPN v0.1.20
 
@@ -204,4 +204,4 @@ jobs:
           # 修改版，因此这里附带**修改后的完整源码**（AGPL-3.0 §6 Corresponding Source）。
           ARCHIVE="fdu-connect-source-a904877-robust-socks.tar.gz"
           tar -czf "$ARCHIVE" -C vendor fdu-connect
-          gh release upload "${{ github.ref_name }}" "$ARCHIVE" --clobber
+          gh release upload "${{ inputs.tag || github.ref_name }}" "$ARCHIVE" --clobber
