@@ -216,15 +216,19 @@ AppConfig {
 
 - 二进制：`labvpn-helper`（与主应用一同打包，安装时复制到系统目录）
 - 通信：回环 TCP `127.0.0.1:38471` + 令牌（`app_data/helper.token`，0600），JSON Lines 协议
+- 协议版本 2：App 和 helper 必须同步升级；旧 helper 不具备就绪确认能力，拒绝用于 TUN，明确回退并提示更新。
 - 命令集（白名单）：
   | 命令 | 参数 | 说明 |
   |---|---|---|
   | `ping` | - | 存活与版本 |
   | `start_core` | `config_yaml: string, assets: map<path,content>` | 写入工作目录（内置规则 + 附加资源）后启动 mihomo |
+  | `confirm_core_ready` | `pid: u32, generation: u64` | App 验证认证控制接口和混合端口后，确认当前会话可清理临时配置 |
   | `stop_core` | - | 停止并等待退出 |
   | `restart_core` | `config_yaml: string` | 先停后起 |
   | `status` | - | 核心 PID、运行时长、最近错误 |
   | `shutdown` | - | 卸载/退出 helper |
+- 敏感配置生命周期：每个会话使用 `config-<generation>.yaml`，不再用固定 2.5 秒计时器删除。仅当前 PID 和 generation 匹配的确认可删除当前会话文件；启动失败、停止、子进程退出及 helper 下次启动也清理配置。App 在确认前退出时，文件以 0600 保留至停止或下一次启动；目前尚无独立的确认超时回收机制。
+- 连接事务：连接、断开、应用配置、校园切换、独立 VPN 操作和健康恢复共用异步锁。应用配置仅重建 mihomo；校园 VPN 的启动参数或凭据变化才重新登录。重建核心仍会中断经由它的现有 TCP/SSH 会话。
 - 安全约束：
   - 只接受回环连接；令牌恒定时间比较；
   - 可执行文件固定为 helper 同目录的 `mihomo`（由安装时确定），请求无法指定路径；

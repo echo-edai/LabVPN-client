@@ -110,6 +110,13 @@ fn dispatch(command: Command, supervisor: &Supervisor) -> (Response, bool) {
             ),
         },
         Command::StopCore => (Response::success().with_status(supervisor.stop()), false),
+        Command::ConfirmCoreReady { pid, generation } => {
+            let response = match supervisor.confirm_ready(pid, generation) {
+                Ok(status) => Response::success().with_status(status),
+                Err(err) => Response::failure(err),
+            };
+            (response, false)
+        }
         Command::RestartCore {
             config_yaml,
             assets,

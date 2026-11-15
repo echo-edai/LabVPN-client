@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 /// 默认 IPC 端口。
 pub const DEFAULT_PORT: u16 = 38471;
 /// 协议版本（helper 与 App 不匹配时提示升级）。
-pub const PROTOCOL_VERSION: u32 = 1;
+pub const PROTOCOL_VERSION: u32 = 2;
 /// 单次请求最大字节数（含配置 YAML）。
 pub const MAX_REQUEST_BYTES: usize = 8 * 1024 * 1024;
 /// helper 服务标签（macOS launchd label / Linux service 名）。
@@ -30,6 +30,13 @@ pub enum Command {
     },
     /// 停止代理核心
     StopCore,
+    /// 应用确认控制 API 和代理端口就绪后，清理本会话敏感文件。
+    ConfirmCoreReady {
+        /// 启动响应中的核心 PID
+        pid: u32,
+        /// 启动响应中的会话编号
+        generation: u64,
+    },
     /// 重启代理核心
     RestartCore {
         /// 新配置
@@ -67,7 +74,7 @@ pub struct CoreStatus {
     pub uptime_secs: Option<u64>,
     /// 最近一次错误
     pub last_error: Option<String>,
-    /// 配置版本（App 侧生成时间戳，便于排查）
+    /// helper 分配的会话编号，用于拒绝延迟到达的旧确认
     pub config_generation: Option<u64>,
     /// 核心日志文件路径（供诊断）
     pub log_path: Option<String>,

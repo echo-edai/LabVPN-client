@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::Instant;
 
@@ -25,6 +26,7 @@ struct Inner {
     started_at: Option<Instant>,
     last_error: Option<String>,
     config_generation: Option<u64>,
+    sensitive_files: Vec<PathBuf>,
     /// 本次核心会话应有的 TUN 自动路由（供路由自愈线程使用）
     #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     tun_plan: Option<TunRoutePlan>,
@@ -44,6 +46,7 @@ impl Supervisor {
                 started_at: None,
                 last_error: None,
                 config_generation: None,
+                sensitive_files: Vec::new(),
                 tun_plan: None,
             }),
         }
@@ -70,109 +73,103 @@ impl Supervisor {
             }
         }
 
-        fs::create_dir_all(&self.workdir).map_err(|err| format!("创建工作目录失败: {err}"))?;
-        let rules_dir = self.workdir.join("rules");
-        fs::create_dir_all(&rules_dir).map_err(|err| format!("创建规则目录失败: {err}"))?;
-        // 内置规则文件（与 App 版本强一致）
-        for (name, content) in labvpn_core::rules::providers::builtin_rule_files() {
-            write_file(&rules_dir.join(name), content.as_bytes(), false)
-                .map_err(|err| format!("写入内置规则失败: {err}"))?;
-        }
-        // 内置 geodata（避免 mihomo 首次启动联网下载）
-        if let Some(bin_dir) = self.core_path.parent() {
-            for name in ["GeoSite.dat", "geoip.metadb"] {
-                let source = bin_dir.join(name);
-                let target = self.workdir.join(name);
-                if source.is_file() && !target.exists() {
-                    let _ = fs::copy(&source, &target);
+        let result = (|| {
+            cleanup_sensitive(&mut inner);
+            fs::create_dir_all(&self.workdir).map_err(|err| format!("创建工作目录失败: {err}"))?;
+            let rules_dir = self.workdir.join("rules");
+            fs::create_dir_all(&rules_dir).map_err(|err| format!("创建规则目录失败: {err}"))?;
+            // 内置规则文件（与 App 版本强一致）
+            for (name, content) in labvpn_core::rules::providers::builtin_rule_files() {
+                write_file(&rules_dir.join(name), content.as_bytes(), false)
+                    .map_err(|err| format!("写入内置规则失败: {err}"))?;
+            }
+            // 内置 geodata（避免 mihomo 首次启动联网下载）
+            if let Some(bin_dir) = self.core_path.parent() {
+                for name in ["GeoSite.dat", "geoip.metadb"] {
+                    let source = bin_dir.join(name);
+                    let target = self.workdir.join(name);
+                    if source.is_file() && !target.exists() {
+                        let _ = fs::copy(&source, &target);
+                    }
                 }
             }
-        }
-        // 附加资源（订阅缓存 / SSH 私钥等）
-        for (rel, content) in assets {
-            if content.len() > MAX_REQUEST_BYTES {
-                return Err(format!("附加文件过大: {rel}"));
+            // 附加资源（订阅缓存 / SSH 私钥等）
+            for (rel, content) in assets {
+                if content.len() > MAX_REQUEST_BYTES {
+                    return Err(format!("附加文件过大: {rel}"));
+                }
+                let path = safe_join(&self.workdir, rel)?;
+                if let Some(parent) = path.parent() {
+                    fs::create_dir_all(parent).map_err(|err| format!("创建目录失败: {err}"))?;
+                }
+                let private = rel.contains("key") || rel.contains("sub") || rel.contains("profile");
+                if rel.starts_with("keys/") {
+                    inner.sensitive_files.push(path.clone());
+                }
+                write_file(&path, content.as_bytes(), private)
+                    .map_err(|err| format!("写入附加文件失败: {err}"))?;
             }
-            let path = safe_join(&self.workdir, rel)?;
-            if let Some(parent) = path.parent() {
-                fs::create_dir_all(parent).map_err(|err| format!("创建目录失败: {err}"))?;
-            }
-            let private = rel.contains("key") || rel.contains("sub") || rel.contains("profile");
-            write_file(&path, content.as_bytes(), private)
-                .map_err(|err| format!("写入附加文件失败: {err}"))?;
-        }
-        let config_path = self.workdir.join("config.yaml");
-        write_file(&config_path, config_yaml.as_bytes(), true)
-            .map_err(|err| format!("写入核心配置失败: {err}"))?;
+            let generation = next_generation();
+            let config_path = self.workdir.join(format!("config-{generation}.yaml"));
+            inner.sensitive_files.push(config_path.clone());
+            write_file(&config_path, config_yaml.as_bytes(), true)
+                .map_err(|err| format!("写入核心配置失败: {err}"))?;
 
-        // 核心日志轮转：长期运行会持续追加，超过 20MB 时归档一份，避免无限增长
-        const MAX_CORE_LOG_BYTES: u64 = 20 * 1024 * 1024;
-        if let Ok(metadata) = fs::metadata(&self.log_path) {
-            if metadata.len() > MAX_CORE_LOG_BYTES {
-                let _ = fs::rename(&self.log_path, self.workdir.join("core.log.1"));
+            // 核心日志轮转：长期运行会持续追加，超过 20MB 时归档一份，避免无限增长
+            const MAX_CORE_LOG_BYTES: u64 = 20 * 1024 * 1024;
+            if let Ok(metadata) = fs::metadata(&self.log_path) {
+                if metadata.len() > MAX_CORE_LOG_BYTES {
+                    let _ = fs::rename(&self.log_path, self.workdir.join("core.log.1"));
+                }
             }
-        }
-        let stdout = fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&self.log_path)
-            .map_err(|err| format!("打开核心日志失败: {err}"))?;
-        let stderr = stdout
-            .try_clone()
-            .map_err(|err| format!("复制日志句柄失败: {err}"))?;
+            let stdout = fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&self.log_path)
+                .map_err(|err| format!("打开核心日志失败: {err}"))?;
+            let stderr = stdout
+                .try_clone()
+                .map_err(|err| format!("复制日志句柄失败: {err}"))?;
 
-        let mut command = Command::new(&self.core_path);
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-            command.creation_flags(CREATE_NO_WINDOW);
-        }
-        command
-            .arg("-d")
-            .arg(&self.workdir)
-            .arg("-f")
-            .arg(&config_path)
-            .stdin(Stdio::null())
-            .stdout(Stdio::from(stdout))
-            .stderr(Stdio::from(stderr));
-        let child = command
-            .spawn()
-            .map_err(|err| format!("启动核心失败（{}）: {err}", self.core_path.display()))?;
-        // 安全清理：核心启动后销毁含明文密码的配置与私钥资产
-        let cleanup_config = config_path.clone();
-        let cleanup_keys: Vec<PathBuf> = assets
-            .keys()
-            .filter(|relative| relative.starts_with("keys/"))
-            .map(|relative| self.workdir.join(relative))
-            .collect();
-        std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_millis(2500));
-            if cleanup_config.exists() {
-                secure_remove(&cleanup_config);
+            let mut command = Command::new(&self.core_path);
+            #[cfg(windows)]
+            {
+                use std::os::windows::process::CommandExt;
+                const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+                command.creation_flags(CREATE_NO_WINDOW);
             }
-            for key in &cleanup_keys {
-                secure_remove(key);
+            command
+                .arg("-d")
+                .arg(&self.workdir)
+                .arg("-f")
+                .arg(&config_path)
+                .stdin(Stdio::null())
+                .stdout(Stdio::from(stdout))
+                .stderr(Stdio::from(stderr));
+            let child = command
+                .spawn()
+                .map_err(|err| format!("启动核心失败（{}）: {err}", self.core_path.display()))?;
+            let pid = child.id();
+            let _ = fs::write(self.workdir.join("mihomo.pid"), format!("{pid}\n"));
+            inner.child = Some(child);
+            inner.started_at = Some(Instant::now());
+            inner.last_error = None;
+            inner.config_generation = Some(generation);
+            // 从生成配置解析本会话应有的 TUN 自动路由，交给自愈线程巡检
+            inner.tun_plan = tun_guard::plan_from_config(config_yaml);
+            if inner.tun_plan.is_some() {
+                logging::info("TUN 自动路由守护已启用（缺失时自动补回）");
             }
-            logging::info("敏感配置文件已清理（config.yaml / keys），仅保留在核心内存中");
-        });
-
-        let pid = child.id();
-        let _ = fs::write(self.workdir.join("mihomo.pid"), format!("{pid}\n"));
-        inner.child = Some(child);
-        inner.started_at = Some(Instant::now());
-        inner.last_error = None;
-        inner.config_generation = Some(now_secs());
-        // 从生成配置解析本会话应有的 TUN 自动路由，交给自愈线程巡检
-        inner.tun_plan = tun_guard::plan_from_config(config_yaml);
-        if inner.tun_plan.is_some() {
-            logging::info("TUN 自动路由守护已启用（缺失时自动补回）");
+            logging::info(format!(
+                "核心已启动 pid={pid} config={}",
+                config_path.display()
+            ));
+            Ok(status_locked(&self.log_path, &mut inner))
+        })();
+        if result.is_err() {
+            cleanup_sensitive(&mut inner);
         }
-        logging::info(format!(
-            "核心已启动 pid={pid} config={}",
-            config_path.display()
-        ));
-        Ok(status_locked(&self.log_path, &mut inner))
+        result
     }
 
     /// 停止核心。
@@ -187,9 +184,25 @@ impl Supervisor {
             logging::info(format!("核心已停止 pid={pid}"));
         }
         remove_pid_file(&self.workdir);
+        cleanup_sensitive(&mut inner);
         inner.started_at = None;
         inner.tun_plan = None;
         status_locked(&self.log_path, &mut inner)
+    }
+
+    /// 仅清理已确认就绪的当前会话，拒绝延迟到达的旧确认。
+    pub fn confirm_ready(&self, pid: u32, generation: u64) -> Result<CoreStatus, String> {
+        let mut inner = self.inner.lock().map_err(|_| "内部锁损坏".to_string())?;
+        let status = status_locked(&self.log_path, &mut inner);
+        if !status.running
+            || status.pid != Some(pid)
+            || status.config_generation != Some(generation)
+        {
+            return Err("核心会话已变化，拒绝清理敏感配置".to_string());
+        }
+        cleanup_sensitive(&mut inner);
+        logging::info("核心就绪已确认，本会话敏感配置已清理");
+        Ok(status)
     }
 
     /// 当前会话的 TUN 自动路由计划（自愈线程使用）。
@@ -236,6 +249,7 @@ fn status_locked(log_path: &Path, inner: &mut Inner) -> CoreStatus {
             inner.child = None;
             inner.started_at = None;
             inner.tun_plan = None;
+            cleanup_sensitive(inner);
             inner.last_error = Some(format!("核心已退出（{status}）"));
             CoreStatus {
                 running: false,
@@ -271,11 +285,16 @@ fn secure_remove(path: &Path) {
     let _ = fs::remove_file(path);
 }
 
-fn now_secs() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.as_secs())
-        .unwrap_or(0)
+fn next_generation() -> u64 {
+    // 同一 helper 内单调递增，快速重连不会复用路径。
+    static GENERATION: AtomicU64 = AtomicU64::new(0);
+    GENERATION.fetch_add(1, Ordering::Relaxed) + 1
+}
+
+fn cleanup_sensitive(inner: &mut Inner) {
+    for path in inner.sensitive_files.drain(..) {
+        secure_remove(&path);
+    }
 }
 
 fn safe_join(base: &Path, rel: &str) -> Result<PathBuf, String> {
@@ -322,6 +341,15 @@ fn cleanup_stale(workdir: &Path) {
     let config = workdir.join("config.yaml");
     if config.exists() {
         secure_remove(&config);
+    }
+    if let Ok(entries) = fs::read_dir(workdir) {
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            if name.starts_with("config-") && name.ends_with(".yaml") {
+                secure_remove(&entry.path());
+            }
+        }
     }
 }
 
@@ -392,5 +420,68 @@ mod tests {
         assert!(safe_join(base, "../etc/passwd").is_err());
         assert!(safe_join(base, "/etc/passwd").is_err());
         assert!(safe_join(base, "a/../../b").is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn stale_ready_confirmation_cannot_delete_new_session() {
+        let dir = std::env::temp_dir().join(format!(
+            "labvpn-ready-{}-{}",
+            std::process::id(),
+            next_generation()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        let supervisor = Supervisor::new(PathBuf::from("/bin/sleep"), dir.clone());
+        let old_file = dir.join("config-old.yaml");
+        let new_file = dir.join("config-new.yaml");
+        fs::write(&old_file, "old").unwrap();
+        fs::write(&new_file, "new").unwrap();
+        let child = Command::new("/bin/sleep").arg("30").spawn().unwrap();
+        let pid = child.id();
+        {
+            let mut inner = supervisor.inner.lock().unwrap();
+            inner.child = Some(child);
+            inner.config_generation = Some(2);
+            inner.sensitive_files = vec![new_file.clone()];
+        }
+        let stale = supervisor.confirm_ready(pid, 1);
+        let retained = new_file.exists();
+        let confirmed = supervisor.confirm_ready(pid, 2);
+        let removed = !new_file.exists();
+        let old_retained = old_file.exists();
+        supervisor.stop();
+        fs::remove_dir_all(dir).unwrap();
+        assert!(stale.is_err());
+        assert!(retained, "旧确认不得删除新配置");
+        assert!(confirmed.is_ok());
+        assert!(removed, "就绪确认必须清理当前敏感配置");
+        assert!(old_retained, "清理必须限定在本会话文件列表");
+    }
+
+    #[test]
+    fn rapid_sessions_have_distinct_generations() {
+        let first = next_generation();
+        let second = next_generation();
+        assert!(second > first);
+    }
+
+    #[test]
+    fn failed_start_removes_session_secrets() {
+        let dir = std::env::temp_dir().join(format!(
+            "labvpn-failed-{}-{}",
+            std::process::id(),
+            next_generation()
+        ));
+        let supervisor = Supervisor::new(dir.join("missing-core"), dir.clone());
+        let assets = BTreeMap::from([("keys/test.pem".into(), "private-test-key".into())]);
+        let result = supervisor.start("test-config", &assets);
+        let retained_key = dir.join("keys/test.pem").exists();
+        let retained_config = fs::read_dir(&dir)
+            .unwrap()
+            .flatten()
+            .any(|entry| entry.file_name().to_string_lossy().starts_with("config-"));
+        fs::remove_dir_all(dir).unwrap();
+        assert!(result.is_err());
+        assert!(!retained_key && !retained_config);
     }
 }

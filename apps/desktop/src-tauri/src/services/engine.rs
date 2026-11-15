@@ -161,6 +161,7 @@ impl EngineManager {
             .iter()
             .map(|(path, _)| path.clone())
             .collect();
+        let mut helper_session = None;
         if request.mode == EngineMode::Tun {
             let assets: std::collections::BTreeMap<String, String> =
                 request.assets.iter().cloned().collect();
@@ -173,7 +174,7 @@ impl EngineManager {
                 HelperCommand::StopCore,
             )
             .await;
-            if let Err(err) = helper::request(
+            let response = helper::request(
                 request.helper_port,
                 &request.helper_token,
                 HelperCommand::StartCore {
@@ -181,12 +182,16 @@ impl EngineManager {
                     assets,
                 },
             )
-            .await
-            {
-                inner.status.state = "error".to_string();
-                inner.status.last_error = Some(err.to_string());
-                self.emit_status(&inner.status);
-                return Err(err);
+            .await;
+            match response {
+                Ok(response) => helper_session = response.status,
+                Err(err) => {
+                    inner.status.state = "error".to_string();
+                    inner.status.last_error = Some(err.to_string());
+                    self.emit_status(&inner.status);
+                    self.cleanup_locked(&mut inner).await;
+                    return Err(err);
+                }
             }
             inner.attached = true;
             self.logs.info("core", "已通过特权 helper 启动 TUN 核心");
@@ -297,7 +302,7 @@ impl EngineManager {
                 .collect();
             let message = format!(
                 "核心控制端口 {} 未就绪（60s 超时）：可能被其他代理软件占用或核心启动失败。\
-                 请先关闭 Clash Verge / Shadowrocket 等代理软件后重试。最近日志：{}",
+                 请检查核心启动日志、配置读取和端口占用。最近日志：{}",
                 request.controller_port,
                 if recent.is_empty() {
                     "（无）".to_string()
@@ -322,8 +327,7 @@ impl EngineManager {
         // 混合端口必须真正监听，否则流量无法走代理（常见于端口被 Clash Verge 等占用）
         if !wait_port_open(request.mixed_port, Duration::from_secs(5)).await {
             let message = format!(
-                "混合代理端口 {} 未监听：大概率被其他代理软件占用（请关闭 Clash Verge / Shadowrocket / 其他 mihomo），\
-                 或在「设置」中换一个端口",
+                "混合代理端口 {} 未监听：请检查核心是否读取了正确配置、是否退出以及端口是否被占用",
                 request.mixed_port
             );
             self.logs.error("core", message.clone());
@@ -333,6 +337,33 @@ impl EngineManager {
             self.emit_status(&inner.status);
             self.cleanup_locked(&mut inner).await;
             return Err(CommandError::new("engine", message));
+        }
+
+        // helper 仅在收到当前会话的就绪确认后清理，禁止定时删除新会话文件。
+        if request.mode == EngineMode::Tun {
+            let session = helper_session.as_ref();
+            let identity = session.and_then(|status| status.pid.zip(status.config_generation));
+            let result = match identity {
+                Some((pid, generation)) => helper::request(
+                    request.helper_port,
+                    &request.helper_token,
+                    HelperCommand::ConfirmCoreReady { pid, generation },
+                )
+                .await
+                .map(|_| ()),
+                None => Err(CommandError::new(
+                    "helper",
+                    "helper 未返回核心会话标识，请更新特权服务",
+                )),
+            };
+            if let Err(err) = result {
+                self.cleanup_locked(&mut inner).await;
+                inner.status.state = "error".to_string();
+                inner.status.last_error = Some(err.to_string());
+                self.emit_status(&inner.status);
+                return Err(err);
+            }
+            inner.status.pid = session.and_then(|status| status.pid);
         }
 
         // 安全清理：核心已完成配置解析，销毁含敏感字段的配置与私钥资产
@@ -458,6 +489,14 @@ impl EngineManager {
     /// 是否运行中（缓存状态，不探测真实进程）。
     pub async fn is_running(&self) -> bool {
         self.inner.lock().await.status.running
+    }
+
+    /// 同步编排警告，避免错误只出现在一闪而过的提示里。
+    pub async fn set_warnings(&self, warnings: Vec<String>) -> EngineStatus {
+        let mut inner = self.inner.lock().await;
+        inner.status.warnings = warnings;
+        self.emit_status(&inner.status);
+        inner.status.clone()
     }
 
     /// 核心是否真的存活：请求 mihomo REST API（2 秒超时）。
