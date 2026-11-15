@@ -112,16 +112,75 @@ pub fn set_system_proxy(port: u16, enable: bool) -> Result<(), String> {
 /// 当前系统代理端口（优先 HTTP，其次 SOCKS）。
 pub fn system_proxy_port() -> Option<u16> {
     let output = run_command("scutil", &["--proxy"])?;
-    let mut http_port = None;
-    let mut socks_port = None;
-    for line in output.lines() {
-        let line = line.trim();
-        if let Some(value) = line.strip_prefix("HTTPPort :") {
-            http_port = value.trim().parse::<u16>().ok();
+    owned_proxy_port(&output)
+}
+
+fn proxy_value<'a>(output: &'a str, key: &str) -> Option<&'a str> {
+    output
+        .lines()
+        .filter_map(|line| line.trim().split_once(" : "))
+        .find_map(|(name, value)| (name == key).then_some(value.trim()))
+}
+
+fn owned_proxy_port(output: &str) -> Option<u16> {
+    let mut found = None;
+    for protocol in ["HTTP", "HTTPS", "SOCKS"] {
+        if proxy_value(output, &format!("{protocol}Enable")) != Some("1") {
+            continue;
         }
-        if let Some(value) = line.strip_prefix("SOCKSPort :") {
-            socks_port = value.trim().parse::<u16>().ok();
+        let host = proxy_value(output, &format!("{protocol}Proxy"))?;
+        if host != "127.0.0.1" && host != "::1" {
+            return None;
         }
+        let port = proxy_value(output, &format!("{protocol}Port"))?
+            .parse::<u16>()
+            .ok()?;
+        if port == 0 || found.is_some_and(|previous| previous != port) {
+            return None;
+        }
+        found = Some(port);
     }
-    http_port.or(socks_port)
+    found
+}
+
+/// 只报告有效的自动代理状态，诊断日志不包含 PAC URL 中可能存在的令牌。
+pub fn proxy_warnings() -> Vec<String> {
+    let Some(output) = run_command("scutil", &["--proxy"]) else {
+        return vec!["无法读取系统代理状态".to_string()];
+    };
+    let mut warnings = Vec::new();
+    if proxy_value(&output, "ProxyAutoConfigEnable") == Some("1") {
+        warnings.push(
+            "系统启用了 PAC 自动代理，浏览器可能选择其他代理出口；请在网络设置中检查来源"
+                .to_string(),
+        );
+    }
+    if proxy_value(&output, "ProxyAutoDiscoveryEnable") == Some("1") {
+        warnings.push("系统启用了 WPAD 自动代理发现，网络变化时代理出口可能改变".to_string());
+    }
+    warnings
+}
+
+#[cfg(test)]
+mod tests {
+    use super::owned_proxy_port;
+
+    #[test]
+    fn ignores_disabled_ports_and_remote_proxies() {
+        assert_eq!(owned_proxy_port("HTTPEnable : 0\nHTTPPort : 7897"), None);
+        assert_eq!(
+            owned_proxy_port("HTTPEnable : 1\nHTTPProxy : proxy.example\nHTTPPort : 7897"),
+            None
+        );
+    }
+
+    #[test]
+    fn requires_consistent_enabled_loopback_proxies() {
+        let output = "HTTPEnable : 1\nHTTPProxy : 127.0.0.1\nHTTPPort : 7897\nHTTPSEnable : 1\nHTTPSProxy : 127.0.0.1\nHTTPSPort : 7897";
+        assert_eq!(owned_proxy_port(output), Some(7897));
+        assert_eq!(
+            owned_proxy_port(&output.replace("HTTPSPort : 7897", "HTTPSPort : 7890")),
+            None
+        );
+    }
 }

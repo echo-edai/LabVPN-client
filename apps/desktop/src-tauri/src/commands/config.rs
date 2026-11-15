@@ -26,9 +26,8 @@ pub fn save_config(
     mut config: AppConfig,
     secrets: SecretUpdates,
 ) -> CmdResult<ConfigEnvelope> {
-    config_service::apply_secret_updates(&state.secrets, secrets)?;
     config.version = labvpn_core::config::CONFIG_VERSION;
-    state.save_config(config)?;
+    state.save_config_with_secrets(config, secrets)?;
     Ok(state.config_envelope())
 }
 
@@ -54,8 +53,7 @@ pub fn import_config(
     secrets: SecretUpdates,
 ) -> CmdResult<ConfigEnvelope> {
     let config = config_service::parse_import(&json)?;
-    config_service::apply_secret_updates(&state.secrets, secrets)?;
-    state.save_config(config)?;
+    state.save_config_with_secrets(config, secrets)?;
     state.logs.info("config", "配置已导入");
     Ok(state.config_envelope())
 }

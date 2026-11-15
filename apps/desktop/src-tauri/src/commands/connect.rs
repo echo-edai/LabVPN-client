@@ -38,9 +38,11 @@ pub async fn stop_engine(state: State<'_, AppState>) -> CmdResult<EngineStatus> 
 /// 重启连接。
 #[tauri::command]
 pub async fn restart_engine(state: State<'_, AppState>) -> CmdResult<ConnectOutcome> {
-    let _ = orchestrator::disconnect(state.inner()).await;
     let campus = campus::current(state.inner()).await;
-    let result = orchestrator::connect(state.inner()).await?;
+    let result = match orchestrator::apply_config(state.inner()).await? {
+        Some(result) => result,
+        None => orchestrator::connect(state.inner()).await?,
+    };
     Ok(outcome(result, Some(campus)))
 }
 

@@ -304,6 +304,8 @@ pub struct SshTestResult {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SystemInfo {
+    /// PAC / WPAD 等有效代理风险。
+    pub proxy_warnings: Vec<String>,
     /// 操作系统
     pub os: String,
     /// 架构

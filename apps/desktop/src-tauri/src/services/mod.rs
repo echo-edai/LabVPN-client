@@ -10,6 +10,7 @@ pub mod mihomo_api;
 pub mod orchestrator;
 pub mod proxy_guard;
 pub mod secrets;
+pub mod ssh_probe;
 pub mod stats;
 pub mod subscription;
 pub mod update;

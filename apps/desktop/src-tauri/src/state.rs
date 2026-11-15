@@ -1,5 +1,6 @@
 //! 全局应用状态。
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
@@ -7,7 +8,7 @@ use labvpn_core::config::AppConfig;
 use labvpn_core::probe::CampusStatus;
 use tauri::AppHandle;
 
-use crate::dto::{ConfigEnvelope, CoreInfo};
+use crate::dto::{ConfigEnvelope, CoreInfo, SecretUpdates};
 use crate::error::CmdResult;
 use crate::paths::AppPaths;
 use crate::services::config as config_service;
@@ -39,6 +40,10 @@ pub struct AppState {
     pub engine: EngineManager,
     /// 校内 VPN
     pub vpn: VpnManager,
+    /// 串行执行连接事务，防止监控与用户操作互相拆除隧道。
+    pub connection_operation: tokio::sync::Mutex<()>,
+    /// 校园凭据变化后，下次应用配置需要重新登录。
+    pub vpn_credentials_changed: AtomicBool,
     /// 校园网检测
     pub campus: tokio::sync::Mutex<CampusState>,
     /// 校园网手动覆盖
@@ -93,6 +98,8 @@ impl AppState {
             logs,
             engine,
             vpn,
+            connection_operation: tokio::sync::Mutex::new(()),
+            vpn_credentials_changed: AtomicBool::new(false),
             campus: tokio::sync::Mutex::new(CampusState { last: None }),
             campus_override: RwLock::new(None),
             core: RwLock::new(core_info),
@@ -115,6 +122,27 @@ impl AppState {
             *guard = config;
         }
         Ok(())
+    }
+
+    /// 保存配置和密钥，仅校园凭据变化标记 VPN 重新登录。
+    pub fn save_config_with_secrets(
+        &self,
+        config: AppConfig,
+        updates: SecretUpdates,
+    ) -> CmdResult<()> {
+        let campus = &config.campus_vpn;
+        let credentials_changed = updates.iter().any(|(key, value)| {
+            let relevant = key == labvpn_core::config::secret_keys::CAMPUS_PASSWORD
+                || campus.password_ref.as_ref() == Some(key)
+                || campus.totp_secret_ref.as_ref() == Some(key);
+            let current = self.secrets.get(key).unwrap_or_default();
+            relevant && current != *value
+        });
+        config_service::apply_secret_updates(&self.secrets, updates)?;
+        if credentials_changed {
+            self.vpn_credentials_changed.store(true, Ordering::Release);
+        }
+        self.save_config(config)
     }
 
     /// 配置信封。

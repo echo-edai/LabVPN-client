@@ -93,6 +93,18 @@ pub fn system_proxy_port() -> Option<u16> {
     }
 }
 
+/// 自动代理可能覆盖应用预期的出口。
+pub fn proxy_warnings() -> Vec<String> {
+    #[cfg(target_os = "macos")]
+    {
+        macos::proxy_warnings()
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Vec::new()
+    }
+}
+
 /// 是否已开启开机自启。
 pub fn is_autostart_enabled(app: &AppHandle) -> bool {
     app.autolaunch().is_enabled().unwrap_or(false)

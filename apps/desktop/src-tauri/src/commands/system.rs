@@ -72,8 +72,8 @@ async fn system_info(state: &AppState) -> SystemInfo {
     };
 
     let mut port_conflicts = Vec::new();
-    let engine_running = state.engine.is_running().await;
-    if !engine_running {
+    let engine = state.engine.status().await;
+    if !engine.running {
         for port in [config.engine.mixed_port, config.engine.controller_port] {
             if platform::port_in_use(port) {
                 port_conflicts.push(format!("127.0.0.1:{port} 已被占用"));
@@ -88,6 +88,7 @@ async fn system_info(state: &AppState) -> SystemInfo {
     }
 
     SystemInfo {
+        proxy_warnings: platform::proxy_warnings(),
         os: std::env::consts::OS.to_string(),
         arch: std::env::consts::ARCH.to_string(),
         app_version: env!("CARGO_PKG_VERSION").to_string(),
@@ -96,7 +97,7 @@ async fn system_info(state: &AppState) -> SystemInfo {
         helper_version,
         default_interface: interface,
         wifi_ssid: ssid,
-        system_proxy_enabled: platform::system_proxy_port() == Some(config.engine.mixed_port),
+        system_proxy_enabled: platform::system_proxy_port() == Some(engine.mixed_port),
         existing_vpn,
         port_conflicts,
         campus_override: state.campus_override(),
@@ -177,16 +178,11 @@ pub async fn start_helper_elevated(state: State<'_, AppState>) -> CmdResult<Oper
 
 /// 设置/关闭系统代理。
 #[tauri::command]
-pub fn set_system_proxy(state: State<'_, AppState>, enabled: bool) -> CmdResult<OperationResult> {
-    let config = state.config_snapshot();
-    match platform::set_system_proxy(config.engine.mixed_port, enabled) {
-        Ok(()) => Ok(OperationResult::ok(if enabled {
-            "系统代理已开启"
-        } else {
-            "系统代理已关闭"
-        })),
-        Err(err) => Err(CommandError::new("systemProxy", err)),
-    }
+pub async fn set_system_proxy(
+    state: State<'_, AppState>,
+    enabled: bool,
+) -> CmdResult<OperationResult> {
+    orchestrator::set_system_proxy(state.inner(), enabled).await
 }
 
 /// 读取开机自启状态。

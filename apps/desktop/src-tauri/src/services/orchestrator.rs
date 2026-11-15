@@ -1,13 +1,16 @@
 //! 编排层：把配置、校园网检测、校内 VPN、代理核心、系统代理串成一次「连接」。
 
-use labvpn_core::config::{secret_keys, AppConfig, IssueLevel, NodeSelectionMode, SshAuth};
+use labvpn_core::config::{
+    secret_keys, AppConfig, CampusVpnConfig, IssueLevel, NodeSelectionMode, SshAuth,
+};
 use labvpn_core::generator::{self, ProfileSource, RuntimeContext, SshRuntime};
 use labvpn_core::rules::names;
+use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Manager};
 
-use crate::dto::{EngineStatus, VpnStatus};
+use crate::dto::{EngineStatus, OperationResult, VpnStatus};
 use crate::error::{CmdResult, CommandError};
 use crate::events;
 use crate::platform;
@@ -37,7 +40,21 @@ struct BuiltRuntime {
 
 /// 连接：检测校园网 → 启动 VPN（必要时）→ 生成配置 → 启动核心 → 切换分组 → 系统代理。
 pub async fn connect(state: &AppState) -> CmdResult<ConnectResult> {
+    let _operation = state.connection_operation.lock().await;
+    connect_locked(state).await
+}
+
+async fn connect_locked(state: &AppState) -> CmdResult<ConnectResult> {
     let mut config = state.config_snapshot();
+    if state.engine.is_running().await {
+        let engine = state.engine.status().await;
+        return Ok(ConnectResult {
+            mode: engine.mode.clone().unwrap_or_default(),
+            warnings: engine.warnings.clone(),
+            engine,
+            vpn: state.vpn.status(&config.campus_vpn).await,
+        });
+    }
     let errors: Vec<String> = config
         .validate()
         .into_iter()
@@ -88,9 +105,10 @@ pub async fn connect(state: &AppState) -> CmdResult<ConnectResult> {
     let on_campus = campus_status.on_campus;
     let skip_vpn = config.campus_vpn.skip_when_on_campus && on_campus;
 
-    // 2) 校内 VPN
+    // 2) 仅连接参数或凭据变化才重新登录，避免无关设置打断校内 SSH。
+    prepare_vpn(state, &config.campus_vpn).await;
     let vpn_status = if !config.campus_vpn.enabled {
-        state.vpn.status(&config.campus_vpn).await
+        state.vpn.stop(&config.campus_vpn).await
     } else if skip_vpn {
         state
             .logs
@@ -112,7 +130,7 @@ pub async fn connect(state: &AppState) -> CmdResult<ConnectResult> {
     };
 
     // 3) helper 可用性决定 TUN 是否启用
-    let (helper_port, helper_token, helper_ready) = helper_readiness(state).await;
+    let (helper_port, helper_token, helper_ready) = helper_readiness(state, &mut warnings).await;
     let want_tun = config.engine.tun.enabled;
     let mode = if want_tun && helper_ready {
         EngineMode::Tun
@@ -156,7 +174,7 @@ pub async fn connect(state: &AppState) -> CmdResult<ConnectResult> {
         mixed_port: config.engine.mixed_port,
         assets: built.assets,
     };
-    let engine_status = state.engine.start(request).await?;
+    state.engine.start(request).await?;
 
     // 6) 校内分组热切换（不重启核心）
     let _ = state.engine.apply_campus_target(on_campus).await;
@@ -193,9 +211,11 @@ pub async fn connect(state: &AppState) -> CmdResult<ConnectResult> {
         if let Err(err) = platform::set_system_proxy(config.engine.mixed_port, true) {
             warnings.push(format!("设置系统代理失败：{err}"));
         }
-    } else {
+    } else if platform::system_proxy_port() == Some(config.engine.mixed_port) {
         let _ = platform::set_system_proxy(config.engine.mixed_port, false);
     }
+    warnings.extend(platform::proxy_warnings());
+    let engine_status = state.engine.set_warnings(warnings.clone()).await;
 
     state.logs.info(
         "orchestrator",
@@ -217,35 +237,102 @@ pub async fn connect(state: &AppState) -> CmdResult<ConnectResult> {
 
 /// 断开：停核心 → 停 VPN → 恢复系统代理。
 pub async fn disconnect(state: &AppState) -> CmdResult<EngineStatus> {
+    let _operation = state.connection_operation.lock().await;
     let config = state.config_snapshot();
-    let status = state.engine.stop().await;
+    let status = stop_core(state).await;
     if config.campus_vpn.managed {
         let _ = state.vpn.stop(&config.campus_vpn).await;
-    }
-    if let Err(err) = platform::set_system_proxy(config.engine.mixed_port, false) {
-        state
-            .logs
-            .warn("orchestrator", format!("恢复系统代理失败：{err}"));
     }
     state.logs.info("orchestrator", "已断开连接");
     Ok(status)
 }
 
+async fn stop_core(state: &AppState) -> EngineStatus {
+    let runtime = state.engine.status().await;
+    let status = state.engine.stop().await;
+    // 重建失败也不能让手动代理遗留到已经停止的核心端口。
+    if platform::system_proxy_port() == Some(runtime.mixed_port) {
+        if let Err(err) = platform::set_system_proxy(runtime.mixed_port, false) {
+            state
+                .logs
+                .warn("orchestrator", format!("恢复系统代理失败：{err}"));
+        }
+    }
+    status
+}
+
 /// 配置变更后应用（运行中则重启核心）。
 pub async fn apply_config(state: &AppState) -> CmdResult<Option<ConnectResult>> {
+    let _operation = state.connection_operation.lock().await;
     let running = state.engine.is_running().await;
     if running {
-        let _ = disconnect(state).await;
-        let result = connect(state).await?;
+        // 重建核心会断开其 TCP 流，但保留 fdu-connect，避免无关的重新登录。
+        stop_core(state).await;
+        let result = connect_locked(state).await?;
         Ok(Some(result))
     } else {
         Ok(None)
     }
 }
 
+async fn prepare_vpn(state: &AppState, config: &CampusVpnConfig) {
+    let credentials_changed = state.vpn_credentials_changed.swap(false, Ordering::AcqRel);
+    if credentials_changed || state.vpn.configuration_changed(config).await {
+        state.vpn.stop(config).await;
+    }
+}
+
+/// 系统代理只能指向活跃核心，关闭前校验当前回环端口。
+pub async fn set_system_proxy(state: &AppState, enabled: bool) -> CmdResult<OperationResult> {
+    let _operation = state.connection_operation.lock().await;
+    let runtime = state.engine.status().await;
+    if enabled && (!runtime.running || !state.engine.core_alive().await) {
+        return Err(CommandError::new(
+            "systemProxy",
+            "请先启动代理核心，避免系统代理指向未监听的端口",
+        ));
+    }
+    if !enabled && platform::system_proxy_port() != Some(runtime.mixed_port) {
+        return Err(CommandError::new(
+            "systemProxy",
+            "当前系统代理未指向 LabVPN，请在系统网络设置中检查",
+        ));
+    }
+    platform::set_system_proxy(runtime.mixed_port, enabled)
+        .map_err(|err| CommandError::new("systemProxy", err))?;
+    Ok(OperationResult::ok(if enabled {
+        "系统代理已开启"
+    } else {
+        "系统代理已关闭"
+    }))
+}
+
+/// 独立启动校园 VPN，也与总开关和自动恢复串行。
+pub async fn start_vpn(state: &AppState) -> CmdResult<VpnStatus> {
+    let _operation = state.connection_operation.lock().await;
+    let config = state.config_snapshot();
+    prepare_vpn(state, &config.campus_vpn).await;
+    let status = state
+        .vpn
+        .start(&config.campus_vpn, &state.secrets, &state.paths)
+        .await?;
+    if state.engine.is_running().await {
+        stop_core(state).await;
+        return Ok(connect_locked(state).await?.vpn);
+    }
+    Ok(status)
+}
+
+/// 独立停止校园 VPN，避免与恢复任务交错。
+pub async fn stop_vpn(state: &AppState) -> VpnStatus {
+    let _operation = state.connection_operation.lock().await;
+    state.vpn.stop(&state.config_snapshot().campus_vpn).await
+}
+
 /// 校园网状态变化后的联动（由轮询任务调用）。
 pub async fn on_campus_changed(app: &AppHandle) {
     let state = app.state::<AppState>();
+    let _operation = state.connection_operation.lock().await;
     let config = state.config_snapshot();
     if !config.campus_vpn.auto_detect_campus {
         return;
@@ -270,6 +357,7 @@ pub async fn on_campus_changed(app: &AppHandle) {
         if config.campus_vpn.enabled {
             let current = state.vpn.status(&config.campus_vpn).await;
             if !matches!(current.state.as_str(), "running" | "reusing") {
+                prepare_vpn(&state, &config.campus_vpn).await;
                 state
                     .logs
                     .info("orchestrator", "离开校园网：重新连接校内 VPN");
@@ -303,10 +391,8 @@ pub fn spawn_engine_watchdog(app: AppHandle) {
                 continue;
             }
             if state.engine.core_alive().await {
-                if !history.is_empty() {
-                    history.clear();
-                    cap_logged = false;
-                }
+                // 短暂恢复不能清空窗口计数，否则抖动时会无限重启并打断 SSH。
+                history.retain(|when| when.elapsed() < WINDOW);
                 continue;
             }
             let now = Instant::now();
@@ -363,7 +449,7 @@ fn detect_outbound_interface() -> Option<String> {
     })
 }
 
-async fn helper_readiness(state: &AppState) -> (u16, String, bool) {
+async fn helper_readiness(state: &AppState, warnings: &mut Vec<String>) -> (u16, String, bool) {
     let port = helper::default_port();
     let token = match helper::ensure_token(&state.paths.token_file) {
         Ok(token) => token,
@@ -375,8 +461,15 @@ async fn helper_readiness(state: &AppState) -> (u16, String, bool) {
         }
     };
     for _ in 0..3 {
-        if helper::ping(port, &token).await.is_some() {
-            return (port, token, true);
+        if let Some(response) = helper::ping(port, &token).await {
+            if labvpn_core::ipc::is_compatible(response.protocol_version) {
+                return (port, token, true);
+            }
+            state
+                .logs
+                .warn("helper", "特权服务协议不兼容，请在设置中更新特权服务");
+            warnings.push("特权服务协议不兼容，请在设置中更新 helper 后再使用 TUN；系统代理模式不能接管全部终端流量".to_string());
+            return (port, token, false);
         }
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     }

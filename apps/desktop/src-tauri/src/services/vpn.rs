@@ -454,6 +454,15 @@ fn should_auto_restart(
         && history_len < AUTO_RESTART_MAX_PER_WINDOW
 }
 
+fn same_session_config(previous: &CampusVpnConfig, next: &CampusVpnConfig) -> bool {
+    let mut session = previous.clone();
+    session.auto_detect_campus = next.auto_detect_campus;
+    session.skip_when_on_campus = next.skip_when_on_campus;
+    session.probe_targets.clone_from(&next.probe_targets);
+    session.campus_cidrs.clone_from(&next.campus_cidrs);
+    session == *next
+}
+
 struct Inner {
     state: String,
     child: Option<Child>,
@@ -502,6 +511,16 @@ impl VpnManager {
                 tcp_health: Arc::new(std::sync::Mutex::new(TcpHealth::default())),
             }),
         }
+    }
+
+    /// 路由和检测设置变化不要求重新登录，连接参数变化才需要。
+    pub async fn configuration_changed(&self, config: &CampusVpnConfig) -> bool {
+        self.inner
+            .lock()
+            .await
+            .config
+            .as_ref()
+            .is_some_and(|previous| !same_session_config(previous, config))
     }
 
     /// 当前状态。
@@ -1430,6 +1449,9 @@ pub fn spawn_health_monitor(app: AppHandle) {
         loop {
             tokio::time::sleep(Duration::from_secs(15)).await;
             let state = app.state::<AppState>();
+            let Ok(_operation) = state.connection_operation.try_lock() else {
+                continue;
+            };
             let config = state.config_snapshot();
             if !config.campus_vpn.enabled || !config.campus_vpn.managed {
                 continue;
@@ -1479,6 +1501,20 @@ mod tests {
     fn escapes_toml_strings() {
         assert_eq!(escape_toml("a\\b\"c"), "a\\\\b\\\"c");
         assert_eq!(escape_toml("line\nbreak"), "line\\nbreak");
+    }
+
+    #[test]
+    fn preserves_session_for_detection_changes_but_not_login_changes() {
+        let previous = CampusVpnConfig::default();
+        let mut next = previous.clone();
+        next.auto_detect_campus = !next.auto_detect_campus;
+        next.probe_targets.clear();
+        assert!(same_session_config(&previous, &next));
+        next.username = "new-account".into();
+        assert!(!same_session_config(&previous, &next));
+        next = previous.clone();
+        next.socks_port += 1;
+        assert!(!same_session_config(&previous, &next));
     }
 
     #[test]
