@@ -299,14 +299,7 @@ export interface EngineStatus {
   warnings: string[];
 }
 
-export type VpnState =
-  | "disabled"
-  | "stopped"
-  | "detecting"
-  | "starting"
-  | "running"
-  | "reusing"
-  | "error";
+export type VpnState = "disabled" | "stopped" | "detecting" | "starting" | "running" | "reusing" | "error";
 
 export interface VpnStatus {
   enabled: boolean;
@@ -366,6 +359,7 @@ export interface ExistingVpn {
 }
 
 export interface SystemInfo {
+  proxyWarnings?: string[];
   os: string;
   arch: string;
   appVersion: string;
@@ -467,7 +461,6 @@ export interface ConnectOutcome {
   mode: string;
   warnings: string[];
 }
-
 
 export interface VpnFailureWindow {
   start: string;

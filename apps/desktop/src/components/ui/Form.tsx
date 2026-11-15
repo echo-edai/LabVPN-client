@@ -1,5 +1,12 @@
 import { Eye, EyeOff } from "lucide-react";
-import { useState, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import {
+  useId,
+  useState,
+  type InputHTMLAttributes,
+  type ReactNode,
+  type SelectHTMLAttributes,
+  type TextareaHTMLAttributes,
+} from "react";
 
 import { cn } from "@/lib/cn";
 
@@ -99,18 +106,29 @@ export function Switch({
   label?: ReactNode;
   description?: ReactNode;
 }) {
+  const id = useId();
   return (
     <div className="flex items-start justify-between gap-4">
       {label || description ? (
         <div className="min-w-0">
-          {label ? <div className="text-[13px] font-medium text-ink">{label}</div> : null}
-          {description ? <div className="hint mt-0.5">{description}</div> : null}
+          {label ? (
+            <div id={`${id}-label`} className="text-[13px] font-medium text-ink">
+              {label}
+            </div>
+          ) : null}
+          {description ? (
+            <div id={`${id}-description`} className="hint mt-0.5">
+              {description}
+            </div>
+          ) : null}
         </div>
       ) : null}
       <button
         type="button"
         role="switch"
         aria-checked={checked}
+        aria-labelledby={label ? `${id}-label` : undefined}
+        aria-describedby={description ? `${id}-description` : undefined}
         disabled={disabled}
         onClick={() => onChange(!checked)}
         className={cn(
@@ -160,9 +178,7 @@ export function Segmented<T extends string>({
           className={cn(
             "rounded-[10px] font-medium transition-all",
             size === "sm" ? "px-2.5 py-1 text-[11.5px]" : "px-3 py-1.5 text-xs",
-            value === option.value
-              ? "bg-card-strong text-ink shadow-sm"
-              : "text-ink-muted hover:text-ink",
+            value === option.value ? "bg-card-strong text-ink shadow-sm" : "text-ink-muted hover:text-ink",
           )}
         >
           {option.label}

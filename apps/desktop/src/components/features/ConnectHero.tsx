@@ -13,9 +13,12 @@ export function ConnectHero() {
   const connect = useAppStore((state) => state.connect);
   const disconnect = useAppStore((state) => state.disconnect);
   const restart = useAppStore((state) => state.restart);
+  const system = useAppStore((state) => state.system);
 
   const running = engine?.running ?? false;
   const connecting = busy === "connect" || busy === "restart" || engine?.state === "starting";
+  const operationBusy = Boolean(busy) || engine?.state === "starting";
+  const warnings = [...new Set([...(engine?.warnings ?? []), ...(system?.proxyWarnings ?? [])])];
   const uptime = engine?.startedAt
     ? Math.max(0, Math.floor((Date.now() - new Date(engine.startedAt).getTime()) / 1000))
     : 0;
@@ -45,15 +48,20 @@ export function ConnectHero() {
             {running ? t("dashboard.heroRunning") : t("dashboard.heroIdle")}
           </h2>
           <p className="mt-1.5 max-w-lg text-[12.5px] leading-5 text-ink-muted">{t("dashboard.heroDesc")}</p>
+          {running ? (
+            <p className="mt-2 max-w-lg text-sm leading-5 text-ink-soft" role="status">
+              {t("dashboard.healthHint")}
+            </p>
+          ) : null}
 
           <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-[11.5px] text-ink-muted">
             <span className="inline-flex items-center gap-1.5">
               <Globe2 size={13} />
-              {running
-                ? engine?.helperMode
-                  ? t("status.helperRunning")
-                  : t("status.systemProxyOn")
-                : t("status.systemProxyOff")}
+              {running && engine?.helperMode
+                ? t("status.helperRunning")
+                : system
+                  ? t(system.systemProxyEnabled ? "status.systemProxyOn" : "status.systemProxyOff")
+                  : t("settings.proxyStatusUnknown")}
             </span>
             <span className="inline-flex items-center gap-1.5">
               <Clock3 size={13} />
@@ -67,24 +75,49 @@ export function ConnectHero() {
 
           <div className="mt-5 flex flex-wrap items-center gap-2">
             {running ? (
-              <Button variant="danger" onClick={() => void disconnect()} loading={busy === "disconnect"}>
+              <Button
+                variant="danger"
+                onClick={() => void disconnect()}
+                disabled={operationBusy}
+                loading={busy === "disconnect"}
+              >
                 {t("common.stop")}
               </Button>
             ) : (
-              <Button variant="primary" onClick={() => void connect()} loading={connecting} icon={<Power size={15} />}>
+              <Button
+                variant="primary"
+                onClick={() => void connect()}
+                disabled={operationBusy}
+                loading={connecting}
+                icon={<Power size={15} />}
+              >
                 {t("common.start")}
               </Button>
             )}
             <Button
               variant="secondary"
               onClick={() => void restart()}
-              disabled={!engine?.running}
+              disabled={!engine?.running || operationBusy}
               loading={busy === "restart"}
               icon={<RefreshCw size={14} />}
             >
               {t("common.restart")}
             </Button>
           </div>
+          {running ? <p className="mt-2 text-xs leading-5 text-ink-muted">{t("dashboard.reconnectHint")}</p> : null}
+          {warnings.length ? (
+            <div
+              role="status"
+              className="mt-3 rounded-lg border border-[var(--warn)]/30 bg-[var(--warn)]/10 p-3 text-sm leading-5 text-ink-soft"
+            >
+              <p className="font-medium">{t("dashboard.proxyWarnings")}</p>
+              <ul className="mt-1 list-disc space-y-1 pl-4">
+                {warnings.map((warning) => (
+                  <li key={warning}>{warning}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           {engine?.lastError ? (
             <div className="mt-3 rounded-lg border border-[var(--err)]/25 bg-[var(--err)]/10 px-3 py-2 text-[11.5px] text-[var(--err)]">
               {engine.lastError}
@@ -95,7 +128,7 @@ export function ConnectHero() {
         <button
           type="button"
           onClick={() => void (running ? disconnect() : connect())}
-          disabled={connecting}
+          disabled={operationBusy}
           className={cn(
             "group relative flex h-[168px] w-[168px] shrink-0 items-center justify-center rounded-full transition-transform active:scale-[0.97]",
             running ? "animate-pulse-ring" : "",
@@ -123,11 +156,7 @@ export function ConnectHero() {
               connecting && "opacity-80",
             )}
           >
-            {connecting ? (
-              <RefreshCw size={34} className="animate-spin" />
-            ) : (
-              <Power size={36} strokeWidth={2} />
-            )}
+            {connecting ? <RefreshCw size={34} className="animate-spin" /> : <Power size={36} strokeWidth={2} />}
           </span>
         </button>
       </div>

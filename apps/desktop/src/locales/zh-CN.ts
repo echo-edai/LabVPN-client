@@ -57,7 +57,7 @@ export const zhCN = {
   "status.onCampus": "当前在校园网内",
   "status.offCampus": "当前在校园网外",
   "status.campusUnknown": "未检测",
-  "status.connected": "已连接",
+  "status.connected": "核心已启动",
   "status.disconnected": "未连接",
   "status.connecting": "正在连接…",
   "status.disconnecting": "正在断开…",
@@ -69,8 +69,8 @@ export const zhCN = {
   "status.vpnDisabled": "VPN 已禁用",
   "status.helperRunning": "特权服务运行中",
   "status.helperMissing": "特权服务未安装",
-  "status.systemProxyOn": "系统代理已开启",
-  "status.systemProxyOff": "系统代理未开启",
+  "status.systemProxyOn": "LabVPN 已接管手动系统代理",
+  "status.systemProxyOff": "LabVPN 未接管手动系统代理",
   "status.confidence": "置信度",
   "status.manual": "手动",
 
@@ -83,7 +83,10 @@ export const zhCN = {
   // 总览
   "dashboard.title": "总览",
   "dashboard.subtitle": "一眼掌握连接状态与分流出口",
-  "dashboard.heroRunning": "LabVPN 正在保护你的网络",
+  "dashboard.heroRunning": "流量通道已启动",
+  "dashboard.healthHint": "核心启动不代表所有网络均可用。请分别验证订阅出口、校内资源和 SSH 服务。",
+  "dashboard.proxyWarnings": "检测到代理设置需要检查",
+  "dashboard.reconnectHint": "重连会重建核心，当前经由它的 SSH 会话将中断。",
   "dashboard.heroIdle": "一键连接，自动分流",
   "dashboard.heroDesc": "校内走 VPN · 国内直连 · 国外走订阅 · 自定义流量走 SSH",
   "analytics.eyebrow": "网络看板",
@@ -112,7 +115,8 @@ export const zhCN = {
   "analytics.proxyIp": "代理出口 IP / 节点",
   "analytics.campusTimeline": "校园网状态时间线",
   "analytics.aiTitle": "AI 平台 IP 追踪",
-  "analytics.aiHint": "自动分析以下平台的访问流量，并记录代理出口 IP 的长期变化（ChatGPT / Claude / Gemini 等看到的 IP）",
+  "analytics.aiHint":
+    "自动分析以下平台的访问流量，并记录代理出口 IP 的长期变化（ChatGPT / Claude / Gemini 等看到的 IP）",
   "analytics.addDomain": "添加域名前缀",
   "analytics.noAiDomains": "尚未配置 AI 平台域名",
   "analytics.aiSaved": "AI 平台域名已保存",
@@ -129,7 +133,8 @@ export const zhCN = {
   "analytics.removeDomain": "删除该平台",
   "analytics.aiPrincipleTitle": "记录原理",
   "analytics.aiPrincipleHint": "为什么这些 IP 是准确的",
-  "analytics.aiPrincipleFooter": "平台侧只能看到连接出口 IP 与代理节点，同一平台前后 IP 变化即代表节点/线路切换。本功能记录的是「平台实际看到的 IP」，而非全局代理出口。",
+  "analytics.aiPrincipleFooter":
+    "平台侧只能看到连接出口 IP 与代理节点，同一平台前后 IP 变化即代表节点/线路切换。本功能记录的是「平台实际看到的 IP」，而非全局代理出口。",
   "analytics.aiIpTitle": "代理出口 IP 变化",
   "analytics.aiIpHint": "AI 平台看到的即为代理节点出口 IP；节点切换会记录在此",
   "dashboard.campusCard": "校园网检测",
@@ -191,7 +196,8 @@ export const zhCN = {
   "setupSubscription.fetchModeCustom": "自定义代理",
   "setupSubscription.fetchProxy": "代理地址",
   "setupSubscription.fetchProxyHint": "支持 http://host:port 或纯端口（如 7897）",
-  "setupSubscription.fetchIpAuthHint": "若导入时报 HTTP 403 / AUTH_FAIL（IP 鉴权），请把拉取方式改为「自定义代理」并填入本机代理端口（Clash Verge 默认 7897），或改用「系统代理」。",
+  "setupSubscription.fetchIpAuthHint":
+    "若导入时报 HTTP 403 / AUTH_FAIL（IP 鉴权），请把拉取方式改为「自定义代理」并填入本机代理端口（Clash Verge 默认 7897），或改用「系统代理」。",
 
   // 校内 VPN 页
   "setupCampus.title": "配置校内 VPN",
@@ -232,12 +238,13 @@ export const zhCN = {
   "setupCampus.extraDomains": "额外走校内的域名",
   "setupCampus.extraDomainsHint": "每行一个域名，例如 science.org（会同时写入 RVPN 强制代理）",
   "setupCampus.proxyAll": "校园 VPN 默认路由",
-  "setupCampus.proxyAllHint": "交给校内 VPN 的流量全部经 RVPN 隧道；修复 RVPN 未收录、但同样需要校内出口的域名（如旦挞的 static.fduhole.com）",
+  "setupCampus.proxyAllHint":
+    "交给校内 VPN 的流量全部经 RVPN 隧道；修复 RVPN 未收录、但同样需要校内出口的域名（如旦挞的 static.fduhole.com）",
   "setupCampus.totpOptional": "（可选）",
 
   // SSH 页
   "setupSsh.title": "配置 SSH 转发",
-  "setupSsh.subtitle": "把公网服务器的 SSH 作为代理出口：指定域名 / IP 的流量将经由该服务器转发",
+  "setupSsh.subtitle": "将 SSH 服务器用作代理出口。登录校内机器请使用校园 VPN；此设置不负责维持终端 SSH 会话。",
   "setupSsh.enable": "启用 SSH 出站代理",
   "setupSsh.host": "公网 IP / 域名",
   "setupSsh.hostPlaceholder": "例如：203.0.113.10",
@@ -271,7 +278,8 @@ export const zhCN = {
   "nodeSelection.save": "保存节点策略",
   "nodeSelection.apply": "立即固定",
   "nodeSelection.switched": "已切换节点",
-  "nodeSelection.hint": "自动模式：按间隔经代理访问测速 URL，mihomo 自动切换到延迟最低节点（容差内不切换）。手动模式：固定使用所选节点，可热切换无需重连。",
+  "nodeSelection.hint":
+    "自动模式：按间隔经代理访问测速 URL，mihomo 自动切换到延迟最低节点（容差内不切换）。手动模式：固定使用所选节点，可热切换无需重连。",
   "nodeSelection.intervalHint": "建议 120–600 秒，最小 30 秒",
   "nodeSelection.noNodes": "尚未导入订阅节点",
   "merge.preset": "分流预设",
@@ -355,11 +363,15 @@ export const zhCN = {
   "settings.tunStack": "TUN 协议栈",
   "settings.mtu": "MTU",
   "settings.dnsHijack": "TUN 模式劫持 DNS",
-  "settings.systemProxy": "同时设置系统代理",
+  "settings.systemProxy": "在系统代理模式中接管代理",
+  "settings.proxyStatusUnknown": "系统代理状态尚未检测",
+  "settings.proxyEnable": "开启",
+  "settings.proxyDisable": "关闭",
   "settings.allowLan": "允许局域网设备接入",
   "settings.ipv6": "启用 IPv6",
   "settings.closeOtherProxies": "连接前关闭其他代理程序",
-  "settings.closeOtherProxiesHint": "自动退出 Clash Verge / ClashX / V2rayU / Shadowrocket / sing-box 等正在运行的代理，避免它们占用系统代理或端口（会关闭这些程序）。",
+  "settings.closeOtherProxiesHint":
+    "自动退出 Clash Verge / ClashX / V2rayU / Shadowrocket / sing-box 等正在运行的代理，避免它们占用系统代理或端口（会关闭这些程序）。",
   "settings.logLevel": "日志级别",
   "settings.helper": "特权服务（TUN）",
   "settings.helperDesc": "TUN 模式需要以管理员身份运行 mihomo。LabVPN 通过独立的特权 helper 完成，核心逻辑仍由你控制。",
@@ -413,7 +425,7 @@ export const zhCN = {
   // Toast
   "toast.saved": "配置已保存",
   "toast.applied": "配置已应用",
-  "toast.connected": "已连接",
+  "toast.connected": "代理核心已启动，请验证所需网络",
   "toast.disconnected": "已断开",
   "toast.importOk": "订阅导入成功",
   "toast.testOk": "测试通过",

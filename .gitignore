@@ -16,6 +16,7 @@ apps/desktop/node_modules/
 apps/desktop/dist/
 
 # ---- 运行时产物 ----
+work/
 tmp/
 *.log
 *.pid

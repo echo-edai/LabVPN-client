@@ -72,6 +72,7 @@ export interface AppStore {
   campus: CampusStatus | null;
   subscription: SubscriptionInfo | null;
   system: SystemInfo | null;
+  refreshSystemInfo: () => Promise<void>;
   core: CoreInfo | null;
   presets: PresetInfo[];
   logs: LogEntry[];
@@ -288,6 +289,14 @@ export const useAppStore = create<AppStore>()((set, get) => ({
     }
   },
 
+  refreshSystemInfo: async () => {
+    try {
+      set({ system: await api.getSystemInfo() });
+    } catch {
+      set({ system: null });
+    }
+  },
+
   loadProxyGroups: async () => {
     try {
       const groups = await api.getProxyGroups();
@@ -320,10 +329,7 @@ export const useAppStore = create<AppStore>()((set, get) => ({
     try {
       const envelope = await api.skipUpdateVersion(version);
       set({ envelope, config: envelope.config, updateDialogOpen: false });
-      get().pushToast(
-        "info",
-        version ? get().t("update.skippedToast", { version }) : get().t("update.resumedToast"),
-      );
+      get().pushToast("info", version ? get().t("update.skippedToast", { version }) : get().t("update.resumedToast"));
     } catch (error) {
       get().pushToast("error", get().t("update.checkFailed"), messageOf(error));
     }
@@ -333,6 +339,7 @@ export const useAppStore = create<AppStore>()((set, get) => ({
   closeUpdateDialog: () => set({ updateDialogOpen: false }),
 
   saveConfig: async (config, secrets = {}) => {
+    if (get().busy) return false;
     set({ busy: "save" });
     try {
       const envelope = await api.saveConfig(config, secrets);
@@ -353,6 +360,7 @@ export const useAppStore = create<AppStore>()((set, get) => ({
   },
 
   applyConfig: async () => {
+    if (get().busy) return false;
     set({ busy: "apply" });
     try {
       const outcome = await api.applyConfig();
@@ -361,6 +369,7 @@ export const useAppStore = create<AppStore>()((set, get) => ({
       }
       set({ busy: null });
       get().pushToast("success", get().t("toast.applied"));
+      void get().refreshSystemInfo();
       if (outcome?.warnings.length) {
         get().pushToast("warn", get().t("common.warning"), outcome.warnings[0]);
       }
@@ -373,6 +382,7 @@ export const useAppStore = create<AppStore>()((set, get) => ({
   },
 
   connect: async () => {
+    if (get().busy) return;
     set({ busy: "connect" });
     try {
       const outcome = await api.startEngine();
@@ -383,6 +393,7 @@ export const useAppStore = create<AppStore>()((set, get) => ({
         busy: null,
       });
       get().pushToast("success", get().t("toast.connected"));
+      void get().refreshSystemInfo();
       if (outcome.warnings.length > 0) {
         get().pushToast("warn", get().t("common.warning"), outcome.warnings[0]);
       }
@@ -395,11 +406,13 @@ export const useAppStore = create<AppStore>()((set, get) => ({
   },
 
   disconnect: async () => {
+    if (get().busy) return;
     set({ busy: "disconnect" });
     try {
       const engine = await api.stopEngine();
       set({ engine, proxyGroups: [], busy: null });
       get().pushToast("info", get().t("toast.disconnected"));
+      void get().refreshSystemInfo();
       void get().loadLogs();
     } catch (error) {
       set({ busy: null });
@@ -408,11 +421,13 @@ export const useAppStore = create<AppStore>()((set, get) => ({
   },
 
   restart: async () => {
+    if (get().busy) return;
     set({ busy: "restart" });
     try {
       const outcome = await api.restartEngine();
       set({ engine: outcome.engine, vpn: outcome.vpn, busy: null });
       get().pushToast("success", get().t("toast.connected"));
+      void get().refreshSystemInfo();
       void get().loadProxyGroups();
     } catch (error) {
       set({ busy: null });
@@ -503,7 +518,11 @@ export const useAppStore = create<AppStore>()((set, get) => ({
     try {
       const result = await api.testSsh(host, port);
       set({ busy: null });
-      get().pushToast(result.ok ? "success" : "error", result.ok ? get().t("toast.testOk") : get().t("toast.testFailed"), result.message);
+      get().pushToast(
+        result.ok ? "success" : "error",
+        result.ok ? get().t("toast.testOk") : get().t("toast.testFailed"),
+        result.message,
+      );
       return result;
     } catch (error) {
       set({ busy: null });

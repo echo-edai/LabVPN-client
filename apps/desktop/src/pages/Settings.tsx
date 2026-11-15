@@ -92,9 +92,10 @@ export function Settings() {
   };
 
   const saveAndApply = async () => {
+    const runtimeChanged = JSON.stringify({ ...draft, ui: config.ui }) !== JSON.stringify(config);
     const ok = await save();
     if (!ok) return;
-    if (engine?.running) {
+    if (engine?.running && runtimeChanged) {
       await applyConfig();
     }
   };
@@ -107,10 +108,22 @@ export function Settings() {
         subtitle={t("settings.subtitle")}
         actions={
           <>
-            <Button size="sm" variant="secondary" icon={<Save size={13} />} loading={busy === "save"} onClick={() => void save()}>
+            <Button
+              size="sm"
+              variant="secondary"
+              icon={<Save size={13} />}
+              loading={busy === "save"}
+              onClick={() => void save()}
+            >
               {t("common.save")}
             </Button>
-            <Button size="sm" variant="primary" icon={<Activity size={13} />} loading={busy === "apply"} onClick={() => void saveAndApply()}>
+            <Button
+              size="sm"
+              variant="primary"
+              icon={<Activity size={13} />}
+              loading={busy === "apply"}
+              onClick={() => void saveAndApply()}
+            >
               {t("common.saveAndApply")}
             </Button>
           </>
@@ -290,9 +303,7 @@ export function Settings() {
                 />
                 <Switch
                   checked={draft.engine.allowLan}
-                  onChange={(allowLan) =>
-                    patch((current) => ({ ...current, engine: { ...current.engine, allowLan } }))
-                  }
+                  onChange={(allowLan) => patch((current) => ({ ...current, engine: { ...current.engine, allowLan } }))}
                   label={t("settings.allowLan")}
                 />
                 <Switch
@@ -312,13 +323,27 @@ export function Settings() {
                   description={t("settings.closeOtherProxiesHint")}
                 />
                 <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-card px-3 py-2">
-                  <span className="text-[11.5px] text-ink-muted">{t("status.systemProxyOn")}</span>
+                  <span className="text-[11.5px] text-ink-muted">
+                    {system
+                      ? t(system.systemProxyEnabled ? "status.systemProxyOn" : "status.systemProxyOff")
+                      : t("settings.proxyStatusUnknown")}
+                  </span>
                   <div className="flex gap-1">
-                    <Button size="sm" variant="secondary" onClick={() => void setSystemProxy(true)}>
-                      开启
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={!engine?.running || Boolean(busy)}
+                      onClick={() => void setSystemProxy(true)}
+                    >
+                      {t("settings.proxyEnable")}
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={() => void setSystemProxy(false)}>
-                      关闭
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={!system?.systemProxyEnabled || Boolean(busy)}
+                      onClick={() => void setSystemProxy(false)}
+                    >
+                      {t("settings.proxyDisable")}
                     </Button>
                   </div>
                 </div>
@@ -387,7 +412,13 @@ export function Settings() {
             >
               {t("settings.refreshSubscription")}
             </Button>
-            <Button size="sm" variant="secondary" icon={<FolderOpen size={13} />} onClick={() => void exportDiagnostics()} block>
+            <Button
+              size="sm"
+              variant="secondary"
+              icon={<FolderOpen size={13} />}
+              onClick={() => void exportDiagnostics()}
+              block
+            >
               {t("settings.diagnostics")}
             </Button>
             <Button
@@ -436,7 +467,10 @@ export function Settings() {
             { label: t("settings.coreDir"), value: envelope?.paths.coreDir, target: "core" },
             { label: t("settings.logsDir"), value: envelope?.paths.logsDir, target: "logs" },
           ].map((item) => (
-            <div key={item.label} className="flex items-center justify-between gap-3 border-b border-line py-2 last:border-0">
+            <div
+              key={item.label}
+              className="flex items-center justify-between gap-3 border-b border-line py-2 last:border-0"
+            >
               <div className="min-w-0">
                 <div className="text-[11.5px] text-ink-soft">{item.label}</div>
                 <div className="truncate font-mono text-[10px] text-ink-muted" title={item.value}>
@@ -448,7 +482,14 @@ export function Settings() {
               </Button>
             </div>
           ))}
-          <Button size="sm" variant="secondary" icon={<FileDown size={12} />} onClick={() => void exportDiagnostics()} className="mt-3" block>
+          <Button
+            size="sm"
+            variant="secondary"
+            icon={<FileDown size={12} />}
+            onClick={() => void exportDiagnostics()}
+            className="mt-3"
+            block
+          >
             {t("settings.diagnostics")}
           </Button>
         </Card>
@@ -497,9 +538,7 @@ export function Settings() {
             <div className="mt-3">
               <Switch
                 checked={draft.update.autoCheck}
-                onChange={(autoCheck) =>
-                  patch((current) => ({ ...current, update: { ...current.update, autoCheck } }))
-                }
+                onChange={(autoCheck) => patch((current) => ({ ...current, update: { ...current.update, autoCheck } }))}
                 label={t("update.autoCheck")}
                 description={t("update.autoCheckHint")}
               />
@@ -508,7 +547,8 @@ export function Settings() {
           <div className="mt-3 flex items-start gap-2 rounded-lg border border-line bg-card px-2.5 py-2 text-[10.5px] text-ink-muted">
             <Info size={12} className="mt-0.5 shrink-0" />
             <span>
-              LabVPN 为非官方开源项目。mihomo（GPL-3.0）与 fdu-connect（AGPL-3.0）已随 App 打包并以独立进程运行，许可证与源码归档见 Release。
+              LabVPN 为非官方开源项目。mihomo（GPL-3.0）与 fdu-connect（AGPL-3.0）已随 App
+              打包并以独立进程运行，许可证与源码归档见 Release。
             </span>
           </div>
           <div className="mt-2 flex items-start gap-2 rounded-lg border border-[var(--ok)]/20 bg-[var(--ok)]/5 px-2.5 py-2 text-[10.5px] text-ink-muted">
