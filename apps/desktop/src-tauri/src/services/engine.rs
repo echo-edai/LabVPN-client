@@ -222,7 +222,7 @@ impl EngineManager {
                 .stdin(std::process::Stdio::null())
                 .stdout(std::process::Stdio::piped())
                 .stderr(std::process::Stdio::piped())
-                .kill_on_drop(false);
+                .kill_on_drop(true);
             #[cfg(windows)]
             {
                 // GUI 应用启动控制台程序时不创建新窗口，避免黑框闪烁/抢焦点

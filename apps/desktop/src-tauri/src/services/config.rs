@@ -52,7 +52,17 @@ fn backup_corrupt(paths: &AppPaths) {
 pub fn save(paths: &AppPaths, config: &AppConfig) -> CmdResult<()> {
     let serialized = serde_json::to_string_pretty(config)?;
     let tmp = paths.config_file.with_extension("json.tmp");
-    std::fs::write(&tmp, serialized)?;
+    use std::io::Write;
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(&tmp)?;
+    file.write_all(serialized.as_bytes())?;
+    file.sync_all()?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;

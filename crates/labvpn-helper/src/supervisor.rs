@@ -312,17 +312,28 @@ fn safe_join(base: &Path, rel: &str) -> Result<PathBuf, String> {
 }
 
 fn write_file(path: &Path, content: &[u8], private: bool) -> std::io::Result<()> {
-    fs::write(path, content)?;
+    use std::io::Write;
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options
+            .mode(if private { 0o600 } else { 0o644 })
+            .custom_flags(libc::O_NOFOLLOW);
+    }
+    let mut file = options.open(path)?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         let mode = if private { 0o600 } else { 0o644 };
-        fs::set_permissions(path, fs::Permissions::from_mode(mode))?;
+        file.set_permissions(fs::Permissions::from_mode(mode))?;
     }
     #[cfg(not(unix))]
     {
         let _ = private;
     }
+    file.write_all(content)?;
     Ok(())
 }
 
@@ -412,6 +423,30 @@ fn kill_pid(pid: u32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn private_write_rejects_symlink_without_truncating_target() {
+        use std::os::unix::fs::{symlink, PermissionsExt};
+        let dir = std::env::temp_dir().join(format!("labvpn-private-{}", next_generation()));
+        fs::create_dir(&dir).expect("创建测试目录");
+        let target = dir.join("target");
+        fs::write(&target, "original").expect("写入目标");
+        let link = dir.join("link");
+        symlink(&target, &link).expect("创建链接");
+        assert!(write_file(&link, b"secret", true).is_err());
+        assert_eq!(fs::read_to_string(&target).expect("读取目标"), "original");
+        write_file(&target, b"secret", true).expect("写入私有文件");
+        assert_eq!(
+            fs::metadata(&target)
+                .expect("文件信息")
+                .permissions()
+                .mode()
+                & 0o777,
+            0o600
+        );
+        fs::remove_dir_all(dir).expect("清理测试目录");
+    }
 
     #[test]
     fn rejects_path_traversal() {

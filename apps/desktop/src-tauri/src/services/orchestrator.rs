@@ -41,7 +41,21 @@ struct BuiltRuntime {
 /// 连接：检测校园网 → 启动 VPN（必要时）→ 生成配置 → 启动核心 → 切换分组 → 系统代理。
 pub async fn connect(state: &AppState) -> CmdResult<ConnectResult> {
     let _operation = state.connection_operation.lock().await;
-    connect_locked(state).await
+    if !state.startup_ready.load(Ordering::Acquire) || state.exiting.load(Ordering::Acquire) {
+        return Err(CommandError::new(
+            "lifecycle",
+            "正在恢复启动环境或退出，请稍后再试",
+        ));
+    }
+    let result = connect_locked(state).await;
+    state
+        .connection_requested
+        .store(result.is_ok(), Ordering::Release);
+    if result.is_err() {
+        stop_core(state).await;
+        state.vpn.stop(&state.config_snapshot().campus_vpn).await;
+    }
+    result
 }
 
 async fn connect_locked(state: &AppState) -> CmdResult<ConnectResult> {
@@ -72,23 +86,7 @@ async fn connect_locked(state: &AppState) -> CmdResult<ConnectResult> {
     // 0) 清理上次异常退出遗留的核心（避免端口被自己的旧进程占用）
     crate::services::engine::cleanup_stale_core(&state.paths.core_dir);
 
-    // 0.2) 可选：关闭本机其他代理程序，避免它们抢占系统代理/端口，导致流量不由 LabVPN 接管
-    if config.engine.close_other_proxies {
-        if crate::services::proxy_guard::supported() {
-            let closed = crate::services::proxy_guard::close_other_proxies(&state.logs).await;
-            if !closed.is_empty() {
-                for name in &closed {
-                    state
-                        .logs
-                        .info("orchestrator", format!("已关闭其他代理：{name}"));
-                }
-                warnings.push(format!("已关闭其他代理：{}", closed.join("、")));
-            }
-        } else {
-            warnings.push("当前平台暂不支持自动关闭其他代理程序".to_string());
-        }
-    }
-
+    // 冲突通过环境检查展示，不在连接时强制结束其他程序。
     // 0.5) 端口冲突自动避让（Clash Verge / Shadowrocket / 其他 mihomo 常占用 7897）
     if !state.engine.is_running().await {
         choose_ports(&mut config, &mut warnings);
@@ -208,11 +206,13 @@ async fn connect_locked(state: &AppState) -> CmdResult<ConnectResult> {
 
     // 7) 系统代理
     if mode == EngineMode::SystemProxy && config.engine.system_proxy {
-        if let Err(err) = platform::set_system_proxy(config.engine.mixed_port, true) {
+        if let Err(err) =
+            crate::services::proxy_lease::acquire(&state.paths.data_dir, config.engine.mixed_port)
+        {
             warnings.push(format!("设置系统代理失败：{err}"));
         }
-    } else if platform::system_proxy_port() == Some(config.engine.mixed_port) {
-        let _ = platform::set_system_proxy(config.engine.mixed_port, false);
+    } else {
+        let _ = crate::services::proxy_lease::restore(&state.paths.data_dir);
     }
     warnings.extend(platform::proxy_warnings());
     let engine_status = state.engine.set_warnings(warnings.clone()).await;
@@ -238,26 +238,25 @@ async fn connect_locked(state: &AppState) -> CmdResult<ConnectResult> {
 /// 断开：停核心 → 停 VPN → 恢复系统代理。
 pub async fn disconnect(state: &AppState) -> CmdResult<EngineStatus> {
     let _operation = state.connection_operation.lock().await;
+    state.connection_requested.store(false, Ordering::Release);
     let config = state.config_snapshot();
     let status = stop_core(state).await;
-    if config.campus_vpn.managed {
-        let _ = state.vpn.stop(&config.campus_vpn).await;
-    }
+    // stop 仅回收本管理器持有的子进程，外部复用实例保持原样。
+    let _ = state.vpn.stop(&config.campus_vpn).await;
+    crate::services::proxy_lease::restore(&state.paths.data_dir)
+        .map_err(|err| CommandError::new("systemProxy", err))?;
     state.logs.info("orchestrator", "已断开连接");
     Ok(status)
 }
 
 async fn stop_core(state: &AppState) -> EngineStatus {
-    let runtime = state.engine.status().await;
-    let status = state.engine.stop().await;
-    // 重建失败也不能让手动代理遗留到已经停止的核心端口。
-    if platform::system_proxy_port() == Some(runtime.mixed_port) {
-        if let Err(err) = platform::set_system_proxy(runtime.mixed_port, false) {
-            state
-                .logs
-                .warn("orchestrator", format!("恢复系统代理失败：{err}"));
-        }
+    // 先恢复路由入口，再关闭监听端口，缩短断网窗口。
+    if let Err(err) = crate::services::proxy_lease::restore(&state.paths.data_dir) {
+        state
+            .logs
+            .warn("orchestrator", format!("恢复系统代理失败：{err}"));
     }
+    let status = state.engine.stop().await;
     status
 }
 
@@ -292,18 +291,16 @@ pub async fn set_system_proxy(state: &AppState, enabled: bool) -> CmdResult<Oper
             "请先启动代理核心，避免系统代理指向未监听的端口",
         ));
     }
-    if !enabled && platform::system_proxy_port() != Some(runtime.mixed_port) {
-        return Err(CommandError::new(
-            "systemProxy",
-            "当前系统代理未指向 LabVPN，请在系统网络设置中检查",
-        ));
-    }
-    platform::set_system_proxy(runtime.mixed_port, enabled)
-        .map_err(|err| CommandError::new("systemProxy", err))?;
+    let result = if enabled {
+        crate::services::proxy_lease::acquire(&state.paths.data_dir, runtime.mixed_port)
+    } else {
+        crate::services::proxy_lease::restore(&state.paths.data_dir)
+    };
+    result.map_err(|err| CommandError::new("systemProxy", err))?;
     Ok(OperationResult::ok(if enabled {
         "系统代理已开启"
     } else {
-        "系统代理已关闭"
+        "已恢复 LabVPN 接管前的系统代理设置"
     }))
 }
 
@@ -384,14 +381,17 @@ pub fn spawn_engine_watchdog(app: AppHandle) {
         loop {
             tokio::time::sleep(Duration::from_secs(15)).await;
             let state = app.state::<AppState>();
-            let status = state.engine.status().await;
-            if !status.running {
+            let Ok(_operation) = state.connection_operation.try_lock() else {
+                continue;
+            };
+            if !state.connection_requested.load(Ordering::Acquire)
+                || state.exiting.load(Ordering::Acquire)
+            {
                 history.clear();
                 cap_logged = false;
                 continue;
             }
             if state.engine.core_alive().await {
-                // 短暂恢复不能清空窗口计数，否则抖动时会无限重启并打断 SSH。
                 history.retain(|when| when.elapsed() < WINDOW);
                 continue;
             }
@@ -412,14 +412,12 @@ pub fn spawn_engine_watchdog(app: AppHandle) {
                 "engine",
                 "[核心自动恢复] 检测到 TUN 核心无响应（helper/core 可能被重启），自动恢复连接…",
             );
-            let result = apply_config(&state).await;
+            stop_core(&state).await;
+            let result = connect_locked(&state).await;
             match result {
-                Ok(Some(_)) => state
+                Ok(_) => state
                     .logs
                     .info("engine", "[核心自动恢复] 恢复完成，TUN/路由已重建"),
-                Ok(None) => state
-                    .logs
-                    .warn("engine", "[核心自动恢复] 核心未运行，跳过本次恢复"),
                 Err(err) => state
                     .logs
                     .error("engine", format!("[核心自动恢复] 恢复失败：{err}")),

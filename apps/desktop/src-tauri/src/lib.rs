@@ -100,6 +100,9 @@ pub fn run() {
             commands::vpn::test_vpn_connection,
             commands::vpn::analyze_vpn_logs,
             commands::vpn::test_ssh,
+            commands::system::inspect_environment,
+            commands::system::disable_proxy_startup,
+            commands::system::open_startup_settings,
             commands::system::get_snapshot,
             commands::system::get_system_info,
             commands::system::install_helper,
@@ -139,8 +142,16 @@ pub fn run() {
                     return;
                 }
                 if let Some(state) = app.try_state::<AppState>() {
+                    state
+                        .exiting
+                        .store(true, std::sync::atomic::Ordering::Release);
                     tauri::async_runtime::block_on(async {
-                        let _ = services::orchestrator::disconnect(state.inner()).await;
+                        if let Err(err) = services::orchestrator::disconnect(state.inner()).await {
+                            state.logs.error(
+                                "shutdown",
+                                format!("退出清理未完成，下次启动将重试：{err}"),
+                            );
+                        }
                         // Windows 等「提权临时启动」模式：退出时关闭 helper
                         if !services::helper::is_installed() {
                             if let Ok(token) =
@@ -222,42 +233,49 @@ fn show_main_window(app: &tauri::AppHandle) {
     }
 }
 
-/// 启动后的后台任务：自动连接、订阅刷新。
+/// 启动只恢复残留状态；登录启动和手动启动都等待用户连接。
 fn spawn_startup_tasks(app: tauri::AppHandle) {
     tauri::async_runtime::spawn(async move {
-        tokio::time::sleep(std::time::Duration::from_millis(1200)).await;
         let state = app.state::<AppState>();
-        let config = state.config_snapshot();
-
-        if config.subscription.enabled
-            && config.subscription.update_interval_hours > 0
-            && !config.subscription.url.trim().is_empty()
-        {
-            let stale = config
-                .subscription
-                .last_updated
-                .map(|time| {
-                    let hours = chrono::Utc::now().signed_duration_since(time).num_hours();
-                    hours >= i64::from(config.subscription.update_interval_hours)
-                })
-                .unwrap_or(true);
-            if stale || !state.paths.profile_file.exists() {
-                match services::subscription::refresh(&state).await {
-                    Ok(info) => state.logs.info(
-                        "subscription",
-                        format!("启动时刷新订阅：{} 个节点", info.proxy_count),
-                    ),
-                    Err(err) => state
+        let _operation = state.connection_operation.lock().await;
+        if let Ok(token) = services::helper::read_token(&state.paths.token_file) {
+            if services::helper::ping(services::helper::default_port(), &token)
+                .await
+                .is_some()
+            {
+                if let Err(err) = services::helper::request_with_timeout(
+                    services::helper::default_port(),
+                    &token,
+                    labvpn_core::ipc::Command::StopCore,
+                    std::time::Duration::from_secs(10),
+                )
+                .await
+                {
+                    state
                         .logs
-                        .warn("subscription", format!("启动刷新订阅失败：{err}")),
+                        .warn("startup", format!("清理上次核心失败：{err}"));
                 }
             }
         }
-
-        if config.engine.connect_on_launch {
-            if let Err(err) = services::orchestrator::connect(&state).await {
-                state.logs.error("startup", format!("自动连接失败：{err}"));
+        if let Err(err) = services::proxy_lease::restore(&state.paths.data_dir) {
+            state
+                .logs
+                .warn("startup", format!("恢复代理环境失败：{err}"));
+        }
+        let mut config = state.config_snapshot();
+        if config.engine.connect_on_launch || config.engine.close_other_proxies {
+            config.engine.connect_on_launch = false;
+            config.engine.close_other_proxies = false;
+            if let Err(err) = state.save_config(config) {
+                state.logs.warn("startup", err.to_string());
             }
         }
+        state
+            .startup_ready
+            .store(true, std::sync::atomic::Ordering::Release);
+        state.logs.info(
+            "startup",
+            "干净启动完成：等待手动连接，不启动代理核心和校园隧道",
+        );
     });
 }

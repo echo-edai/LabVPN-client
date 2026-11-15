@@ -44,6 +44,11 @@ pub struct AppState {
     pub connection_operation: tokio::sync::Mutex<()>,
     /// 校园凭据变化后，下次应用配置需要重新登录。
     pub vpn_credentials_changed: AtomicBool,
+    /// 启动恢复完成前禁止连接。
+    pub startup_ready: AtomicBool,
+    /// 用户期望连接状态，独立于子进程存活状态。
+    pub connection_requested: AtomicBool,
+    pub exiting: AtomicBool,
     /// 校园网检测
     pub campus: tokio::sync::Mutex<CampusState>,
     /// 校园网手动覆盖
@@ -100,6 +105,9 @@ impl AppState {
             vpn,
             connection_operation: tokio::sync::Mutex::new(()),
             vpn_credentials_changed: AtomicBool::new(false),
+            startup_ready: AtomicBool::new(false),
+            connection_requested: AtomicBool::new(false),
+            exiting: AtomicBool::new(false),
             campus: tokio::sync::Mutex::new(CampusState { last: None }),
             campus_override: RwLock::new(None),
             core: RwLock::new(core_info),

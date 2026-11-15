@@ -9,6 +9,11 @@ mod macos;
 #[cfg(windows)]
 mod windows;
 
+mod startup;
+pub use startup::{
+    can_disable_proxy_startup, disable_proxy_startup, open_startup_settings, startup_items,
+};
+
 use tauri::AppHandle;
 use tauri_plugin_autostart::ManagerExt;
 
@@ -52,26 +57,14 @@ pub fn wifi_ssid() -> Option<String> {
     }
 }
 
-/// 设置/取消系统代理（指向本机混合端口）。
-pub fn set_system_proxy(port: u16, enable: bool) -> Result<(), String> {
-    #[cfg(target_os = "macos")]
-    {
-        macos::set_system_proxy(port, enable)
-    }
-    #[cfg(target_os = "linux")]
-    {
-        linux::set_system_proxy(port, enable)
-    }
-    #[cfg(windows)]
-    {
-        windows::set_system_proxy(port, enable)
-    }
-    #[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
-    {
-        let _ = (port, enable);
-        Err("当前平台不支持自动设置系统代理".to_string())
-    }
-}
+#[cfg(target_os = "linux")]
+use linux as native;
+#[cfg(target_os = "macos")]
+use macos as native;
+#[cfg(windows)]
+use windows as native;
+
+pub use native::{capture_proxy_settings, proxy_summary, read_proxy_setting, write_proxy_setting};
 
 /// 读取当前系统代理端口（无则 None）。
 pub fn system_proxy_port() -> Option<u16> {
@@ -150,11 +143,41 @@ pub(crate) fn hidden_command<P: AsRef<std::ffi::OsStr>>(program: P) -> std::proc
 /// 执行命令并返回 stdout（失败返回 None）。
 #[allow(dead_code)]
 pub(crate) fn run_command(program: &str, args: &[&str]) -> Option<String> {
-    let output = hidden_command(program).args(args).output().ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    Some(String::from_utf8_lossy(&output.stdout).to_string())
+    use std::io::Read;
+    use std::process::Stdio;
+    use std::time::{Duration, Instant};
+    let mut child = hidden_command(program)
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+    let stdout = child.stdout.take()?;
+    let reader = std::thread::spawn(move || {
+        let mut text = String::new();
+        stdout
+            .take(2 * 1024 * 1024)
+            .read_to_string(&mut text)
+            .ok()?;
+        Some(text)
+    });
+    let started = Instant::now();
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break Some(status),
+            Ok(None) if started.elapsed() < Duration::from_secs(8) => {
+                std::thread::sleep(Duration::from_millis(25))
+            }
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                break None;
+            }
+        }
+    };
+    let output = reader.join().ok().flatten();
+    status.filter(|status| status.success()).and(output)
 }
 
 /// 用系统默认程序打开路径。

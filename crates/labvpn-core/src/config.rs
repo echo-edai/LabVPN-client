@@ -718,7 +718,7 @@ impl Default for EngineConfig {
             ipv6: false,
             log_level: "info".to_string(),
             connect_on_launch: false,
-            close_other_proxies: true,
+            close_other_proxies: false,
         }
     }
 }

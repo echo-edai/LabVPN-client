@@ -422,15 +422,33 @@ async fn probe_tcp_via_socks(socks_port: u16, host: &str, port: u16) -> Result<u
             return Err("TCP DNS 无应答记录".to_string());
         }
     } else {
-        // 其它端口：等待 2 秒，若被关闭则视为失败
+        // 非 DNS 目标必须收到数据，不能把 SOCKS 的提前成功当成远端可用
         let mut probe = [0u8; 1];
         match tokio::time::timeout(Duration::from_secs(2), stream.read(&mut probe)).await {
             Ok(Ok(0)) => return Err("TCP 探测目标已关闭连接".to_string()),
             Ok(Err(err)) => return Err(format!("TCP 探测读失败：{err}")),
-            _ => {}
+            Ok(Ok(_)) => {}
+            Err(_) => {
+                return Err("目标没有返回数据，不能确认隧道可用；建议使用 DNS 端口探测".into())
+            }
         }
     }
     Ok(started.elapsed().as_millis() as u64)
+}
+
+/// 用配置中的校园 TCP DNS 验证真实数据往返，不发送凭据。
+pub async fn probe_campus_dns(config: &CampusVpnConfig) -> Result<u64, String> {
+    let target = config
+        .probe_targets
+        .iter()
+        .find(|target| target.port == 53 && target.host != config.keepalive_host)
+        .ok_or_else(|| "未配置独立校园 DNS 探测目标".to_string())?;
+    tokio::time::timeout(
+        Duration::from_secs(15),
+        probe_tcp_via_socks(config.socks_port, &target.host, 53),
+    )
+    .await
+    .unwrap_or_else(|_| Err("校园 DNS 探测总超时".into()))
 }
 
 /// 自动重启的并发保护与频率记录。
@@ -608,8 +626,27 @@ impl VpnManager {
             guard.last_probe = Some(Instant::now());
         }
         let target = format!("{}:{}", config.keepalive_host, config.keepalive_port);
-        let result =
-            probe_tcp_via_socks(socks_port, &config.keepalive_host, config.keepalive_port).await;
+        let primary = tokio::time::timeout(
+            Duration::from_secs(20),
+            probe_tcp_via_socks(socks_port, &config.keepalive_host, config.keepalive_port),
+        )
+        .await
+        .unwrap_or_else(|_| Err("主探测总超时".into()));
+        // 单个公共 DNS 被封锁不能作为拆除校园隧道的依据。
+        let result = if primary.is_err() {
+            match probe_campus_dns(&config).await {
+                Ok(ms) => {
+                    self.logs.warn(
+                        "vpn",
+                        format!("主探测 {target} 失败，但校园 DNS 数据往返正常，保留当前隧道"),
+                    );
+                    Ok(ms)
+                }
+                Err(_) => primary,
+            }
+        } else {
+            primary
+        };
         let mut guard = match health.lock() {
             Ok(guard) => guard,
             Err(poisoned) => poisoned.into_inner(),
@@ -841,7 +878,7 @@ impl VpnManager {
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
-            .kill_on_drop(false);
+            .kill_on_drop(true);
         let mut child = command
             .spawn()
             .map_err(|err| CommandError::new("vpn", format!("启动 fdu-connect 失败: {err}")))?;

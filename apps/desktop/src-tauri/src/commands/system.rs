@@ -109,6 +109,13 @@ async fn system_info(state: &AppState) -> SystemInfo {
 /// 安装特权 helper（弹出系统授权）。
 #[tauri::command]
 pub async fn install_helper(state: State<'_, AppState>) -> CmdResult<OperationResult> {
+    let _operation = state.connection_operation.lock().await;
+    if state.engine.is_running().await {
+        return Err(CommandError::new(
+            "helper",
+            "请先安全断开，再更新特权服务 / Disconnect before updating the helper",
+        ));
+    }
     let helper_path = core_bin::resolve_helper(&state.app, &state.paths).ok_or_else(|| {
         CommandError::new("helper", "找不到 labvpn-helper，请先运行 sidecars 脚本")
     })?;
@@ -287,4 +294,27 @@ pub async fn detect_campus_now(
         orchestrator::on_campus_changed(&state.app).await;
     }
     Ok(OperationResult::ok("已刷新校园网状态"))
+}
+
+/// 只读环境快照，可选择执行 HTTPS 数据面探测。
+#[tauri::command]
+pub async fn inspect_environment(
+    state: State<'_, AppState>,
+    test_network: bool,
+) -> CmdResult<crate::services::environment::EnvironmentReport> {
+    crate::services::environment::inspect(state.inner(), test_network).await
+}
+
+#[tauri::command]
+pub async fn disable_proxy_startup() -> CmdResult<OperationResult> {
+    let message = tokio::task::spawn_blocking(platform::disable_proxy_startup)
+        .await
+        .map_err(|err| CommandError::new("startup", err.to_string()))?
+        .map_err(|err| CommandError::new("startup", err))?;
+    Ok(OperationResult::ok(message))
+}
+
+#[tauri::command]
+pub fn open_startup_settings() -> CmdResult<()> {
+    platform::open_startup_settings().map_err(|err| CommandError::new("startup", err))
 }
