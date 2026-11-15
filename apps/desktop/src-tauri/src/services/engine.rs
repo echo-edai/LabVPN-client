@@ -134,7 +134,9 @@ impl EngineManager {
         if inner.status.running {
             return Ok(inner.status.clone());
         }
-        self.cleanup_locked(&mut inner).await;
+        if let Some(error) = self.cleanup_locked(&mut inner).await {
+            return Err(CommandError::new("engine", error));
+        }
 
         inner.status = EngineStatus {
             state: "starting".to_string(),
@@ -165,15 +167,8 @@ impl EngineManager {
         if request.mode == EngineMode::Tun {
             let assets: std::collections::BTreeMap<String, String> =
                 request.assets.iter().cloned().collect();
-            // 上次 App 实例 / 异常退出可能在 helper 中留下了仍存活的核心；直接 StartCore 会
-            // 返回「核心已在运行，请先停止」，使重启后的 App 永远连不上。启动前先无条件
-            // StopCore（没有核心时 helper 会返回错误，忽略即可）。
-            let _ = helper::request(
-                request.helper_port,
-                &request.helper_token,
-                HelperCommand::StopCore,
-            )
-            .await;
+            // 旧会话必须确认停止，才能启动新会话。
+            helper::stop_core(request.helper_port, &request.helper_token).await?;
             let response = helper::request(
                 request.helper_port,
                 &request.helper_token,
@@ -189,7 +184,7 @@ impl EngineManager {
                     inner.status.state = "error".to_string();
                     inner.status.last_error = Some(err.to_string());
                     self.emit_status(&inner.status);
-                    self.cleanup_locked(&mut inner).await;
+                    let _ = self.cleanup_locked(&mut inner).await;
                     return Err(err);
                 }
             }
@@ -313,7 +308,7 @@ impl EngineManager {
             inner.status.state = "error".to_string();
             inner.status.last_error = Some(message.clone());
             self.emit_status(&inner.status);
-            self.cleanup_locked(&mut inner).await;
+            let _ = self.cleanup_locked(&mut inner).await;
             return Err(CommandError::new("engine", message));
         };
         self.logs.info(
@@ -335,7 +330,7 @@ impl EngineManager {
             inner.status.last_error = Some(message.clone());
             inner.status.running = false;
             self.emit_status(&inner.status);
-            self.cleanup_locked(&mut inner).await;
+            let _ = self.cleanup_locked(&mut inner).await;
             return Err(CommandError::new("engine", message));
         }
 
@@ -357,7 +352,7 @@ impl EngineManager {
                 )),
             };
             if let Err(err) = result {
-                self.cleanup_locked(&mut inner).await;
+                let _ = self.cleanup_locked(&mut inner).await;
                 inner.status.state = "error".to_string();
                 inner.status.last_error = Some(err.to_string());
                 self.emit_status(&inner.status);
@@ -412,7 +407,12 @@ impl EngineManager {
     /// 停止引擎。
     pub async fn stop(&self) -> EngineStatus {
         let mut inner = self.inner.lock().await;
-        self.cleanup_locked(&mut inner).await;
+        if let Some(error) = self.cleanup_locked(&mut inner).await {
+            inner.status.state = "error".to_string();
+            inner.status.last_error = Some(error);
+            self.emit_status(&inner.status);
+            return inner.status.clone();
+        }
         inner.status.state = "idle".to_string();
         inner.status.running = false;
         inner.status.mode = None;
@@ -420,12 +420,13 @@ impl EngineManager {
         inner.status.helper_mode = false;
         inner.status.pid = None;
         inner.status.started_at = None;
+        inner.status.last_error = None;
         self.emit_status(&inner.status);
         self.logs.info("engine", "引擎已停止");
         inner.status.clone()
     }
 
-    async fn cleanup_locked(&self, inner: &mut Inner) {
+    async fn cleanup_locked(&self, inner: &mut Inner) -> Option<String> {
         if let Some(task) = inner.traffic_task.take() {
             task.abort();
         }
@@ -435,22 +436,39 @@ impl EngineManager {
         if let Some(task) = inner.conn_task.take() {
             task.abort();
         }
-        if let Some(pid_file) = inner.pid_file.take() {
-            let _ = std::fs::remove_file(pid_file);
-        }
-        if !inner.helper_token.is_empty() && inner.helper_port != 0 {
+        let mut error = None;
+        if inner.status.helper_mode && !inner.helper_token.is_empty() && inner.helper_port != 0 {
             let port = inner.helper_port;
             let token = inner.helper_token.clone();
-            if let Err(err) = helper::request(port, &token, HelperCommand::StopCore).await {
-                log::warn!("通过 helper 停止核心失败: {err}");
+            match helper::stop_core(port, &token).await {
+                Ok(_) => {
+                    inner.helper_token.clear();
+                    inner.helper_port = 0;
+                }
+                Err(err) => {
+                    let message = format!("通过 helper 停止核心未确认，请安全断开重试 / Helper stop unconfirmed; retry safe disconnect: {err}");
+                    self.logs.error("engine", message.clone());
+                    error = Some(message);
+                }
             }
         }
         inner.attached = false;
         if let Some(mut child) = inner.child.take() {
-            let _ = child.kill().await;
-            let _ = child.wait().await;
+            // kill 会等待进程结束；失败保留句柄供下次重试。
+            if let Err(err) = child.kill().await {
+                if !matches!(child.try_wait(), Ok(Some(_))) {
+                    error = Some(format!("核心退出未确认 / Core exit unconfirmed: {err}"));
+                    inner.child = Some(child);
+                }
+            }
         }
         inner.api = None;
+        if error.is_none() {
+            if let Some(pid_file) = inner.pid_file.take() {
+                let _ = std::fs::remove_file(pid_file);
+            }
+        }
+        error
     }
 
     /// 切换代理组。

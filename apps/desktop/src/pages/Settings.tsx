@@ -175,11 +175,9 @@ export function Settings() {
               label={t("settings.tray")}
             />
             <Switch
-              checked={draft.ui.autoLaunch}
-              onChange={async (autoLaunch) => {
-                patch((current) => ({ ...current, ui: { ...current.ui, autoLaunch } }));
-                await setAutostart(autoLaunch);
-              }}
+              checked={config.ui.autoLaunch}
+              disabled={Boolean(busy)}
+              onChange={(autoLaunch) => void setAutostart(autoLaunch)}
               label={t("settings.autoLaunch")}
             />
             <p className="text-sm leading-6 text-ink-muted">{t("settings.cleanLaunchHint")}</p>
@@ -368,10 +366,20 @@ export function Settings() {
             >
               {t(system?.helperInstalled ? "settings.helperUpdate" : "settings.helperInstall")}
             </Button>
-            <Button size="sm" variant="secondary" onClick={() => void startHelperElevated()}>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={Boolean(busy) || Boolean(engine?.running)}
+              onClick={() => void startHelperElevated()}
+            >
               {t("settings.helperElevated")}
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => void uninstallHelper()}>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={Boolean(busy) || Boolean(engine?.running)}
+              onClick={() => void uninstallHelper()}
+            >
               {t("settings.helperUninstall")}
             </Button>
           </div>

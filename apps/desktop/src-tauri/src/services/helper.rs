@@ -107,6 +107,19 @@ pub async fn ping(port: u16, token: &str) -> Option<Response> {
         .ok()
 }
 
+/// 停止必须确认核心已退出，避免把 IPC 成功误当作清理成功。
+pub async fn stop_core(port: u16, token: &str) -> CmdResult<()> {
+    let response =
+        request_with_timeout(port, token, Command::StopCore, Duration::from_secs(10)).await?;
+    if !response.status.is_some_and(|status| !status.running) {
+        return Err(CommandError::new(
+            "helper",
+            "核心退出未确认 / Core exit was not confirmed",
+        ));
+    }
+    Ok(())
+}
+
 /// 停止 helper。
 pub async fn shutdown(port: u16, token: &str) -> bool {
     request_with_timeout(port, token, Command::Shutdown, Duration::from_secs(10))
@@ -320,4 +333,49 @@ fn shell_join(args: &[String]) -> String {
 /// 默认 IPC 端口。
 pub fn default_port() -> u16 {
     DEFAULT_PORT
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use labvpn_core::ipc::CoreStatus;
+
+    // 独立回环端口模拟协议，不访问本机特权服务。
+    async fn stop_result(response: Response) -> CmdResult<()> {
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+            .await
+            .unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let task = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut reader = BufReader::new(&mut stream);
+            let mut line = String::new();
+            reader.read_line(&mut line).await.unwrap();
+            let request: Request = serde_json::from_str(&line).unwrap();
+            assert_eq!(request.command, Command::StopCore);
+            assert_eq!(request.token, "test-token");
+            let payload = serde_json::to_string(&response).unwrap() + "\n";
+            stream.write_all(payload.as_bytes()).await.unwrap();
+        });
+        let result = stop_core(port, "test-token").await;
+        task.await.unwrap();
+        result
+    }
+
+    #[tokio::test]
+    async fn stop_requires_explicit_exited_status() {
+        assert!(stop_result(Response::success()).await.is_err());
+        assert!(stop_result(Response::success().with_status(CoreStatus {
+            running: true,
+            ..CoreStatus::default()
+        }))
+        .await
+        .is_err());
+        assert!(stop_result(Response::failure("denied")).await.is_err());
+        assert!(
+            stop_result(Response::success().with_status(CoreStatus::default()))
+                .await
+                .is_ok()
+        );
+    }
 }

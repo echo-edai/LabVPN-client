@@ -46,6 +46,8 @@ pub struct AppState {
     pub vpn_credentials_changed: AtomicBool,
     /// 启动恢复完成前禁止连接。
     pub startup_ready: AtomicBool,
+    /// 清理失败保留原因，允许用户安全重试。
+    pub startup_error: RwLock<Option<String>>,
     /// 用户期望连接状态，独立于子进程存活状态。
     pub connection_requested: AtomicBool,
     pub exiting: AtomicBool,
@@ -106,6 +108,7 @@ impl AppState {
             connection_operation: tokio::sync::Mutex::new(()),
             vpn_credentials_changed: AtomicBool::new(false),
             startup_ready: AtomicBool::new(false),
+            startup_error: RwLock::new(None),
             connection_requested: AtomicBool::new(false),
             exiting: AtomicBool::new(false),
             campus: tokio::sync::Mutex::new(CampusState { last: None }),
@@ -155,7 +158,9 @@ impl AppState {
 
     /// 配置信封。
     pub fn config_envelope(&self) -> ConfigEnvelope {
-        let config = self.config_snapshot();
+        let mut config = self.config_snapshot();
+        // 登录项由系统管理，配置文件不能代表实际状态。
+        config.ui.auto_launch = crate::platform::is_autostart_enabled(&self.app);
         config_service::envelope(&self.paths, &config, &self.secrets)
     }
 

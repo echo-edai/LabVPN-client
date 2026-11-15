@@ -62,6 +62,17 @@ pub async fn inspect(state: &AppState, test_network: bool) -> CmdResult<Environm
     .await
     .map_err(|err| CommandError::new("environment", err.to_string()))?;
     let mut warnings = platform::proxy_warnings();
+    if let Some(error) = state
+        .startup_error
+        .read()
+        .ok()
+        .and_then(|error| error.clone())
+    {
+        warnings.push(error);
+    }
+    if let Some(error) = runtime.last_error.as_ref() {
+        warnings.push(error.clone());
+    }
     let proxies = proxies.unwrap_or_else(|err| {
         warnings.push(err);
         Vec::new()

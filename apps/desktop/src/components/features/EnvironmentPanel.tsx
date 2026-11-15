@@ -88,7 +88,11 @@ export function EnvironmentPanel() {
           {t("environment.check")}
         </Button>
         <Button
-          disabled={disabled || !report || (!report.coreRunning && !report.vpnPid && !report.proxyLeasePending)}
+          disabled={
+            disabled ||
+            !report ||
+            (report.startupReady && !report.coreRunning && !report.vpnPid && !report.proxyLeasePending)
+          }
           loading={working === "disconnect"}
           icon={<Power size={16} />}
           onClick={() => void action("disconnect", disconnect)}

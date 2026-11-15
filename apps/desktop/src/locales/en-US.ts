@@ -24,7 +24,7 @@ export const enUS: Partial<Record<MessageKey, string>> = {
   "environment.actionHint":
     "Checks do not reconnect. Disabling startup affects recognized services only; administrator authorization is required for system services. Existing connections keep running.",
   "environment.ready": "Clean startup complete",
-  "environment.recovering": "Recovering startup state",
+  "environment.recovering": "Startup cleanup pending; retry safely",
   "environment.core": "Proxy core",
   "environment.noResponse": "Control API unresponsive",
   "environment.stopped": "Stopped",

@@ -834,7 +834,7 @@ export async function mockInvoke(cmd: string, args?: Record<string, unknown>): P
         vpnState: vpn.state,
         vpnPid: vpn.pid,
         proxyLeasePending: false,
-        autostart: false,
+        autostart: config.ui.autoLaunch,
         canDisableStartup: false,
         proxies: [],
         proxySettings: ["Preview: system settings are not read"],
@@ -864,8 +864,9 @@ export async function mockInvoke(cmd: string, args?: Record<string, unknown>): P
     case "set_system_proxy":
       return operation(args?.enabled ? "系统代理已开启" : "系统代理已关闭");
     case "get_autostart":
-      return false;
+      return config.ui.autoLaunch;
     case "set_autostart":
+      config = { ...config, ui: { ...config.ui, autoLaunch: Boolean(args?.enabled) } };
       return operation(args?.enabled ? "已开启开机自启" : "已关闭开机自启");
     case "get_logs":
       return logs.slice(-Number(args?.limit ?? 200));

@@ -22,7 +22,7 @@ export const zhCN = {
   "environment.actionHint":
     "网络检查仅探测，不重连。停用自启动只影响已识别的启动项；系统服务会请求管理员授权，当前连接继续运行。",
   "environment.ready": "干净启动已完成",
-  "environment.recovering": "正在恢复启动环境",
+  "environment.recovering": "启动环境待恢复，可安全重试",
   "environment.core": "代理核心",
   "environment.noResponse": "控制接口无响应",
   "environment.stopped": "未运行",
@@ -397,7 +397,7 @@ export const zhCN = {
   "settings.language": "语言",
   "settings.behavior": "行为",
   "settings.tray": "关闭窗口时最小化到托盘",
-  "settings.autoLaunch": "开机自动启动",
+  "settings.autoLaunch": "登录时打开 LabVPN",
   "settings.connectOnLaunch": "启动后自动连接",
   "settings.engine": "代理引擎",
   "settings.mixedPort": "混合代理端口",

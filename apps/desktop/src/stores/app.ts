@@ -669,12 +669,17 @@ export const useAppStore = create<AppStore>()((set, get) => ({
   },
 
   setAutostart: async (enabled) => {
+    if (get().busy) return;
+    set({ busy: "autostart" });
     try {
       const result = await api.setAutostart(enabled);
       get().pushToast("info", result.message);
-      await get().refresh();
     } catch (error) {
       get().pushToast("error", get().t("toast.failed"), messageOf(error));
+    } finally {
+      // 成功或失败都回读系统，避免乐观开关停在错误状态。
+      await get().refresh();
+      set({ busy: null });
     }
   },
 

@@ -149,6 +149,13 @@ pub async fn install_helper(state: State<'_, AppState>) -> CmdResult<OperationRe
 /// 卸载特权 helper。
 #[tauri::command]
 pub async fn uninstall_helper(state: State<'_, AppState>) -> CmdResult<OperationResult> {
+    let _operation = state.connection_operation.lock().await;
+    if state.engine.is_running().await {
+        return Err(CommandError::new(
+            "helper",
+            "请先断开连接再卸载特权服务 / Disconnect before uninstalling helper",
+        ));
+    }
     let helper_path = core_bin::resolve_helper(&state.app, &state.paths)
         .ok_or_else(|| CommandError::new("helper", "找不到 labvpn-helper"))?;
     let result = tokio::task::spawn_blocking(move || helper::uninstall(&helper_path))
@@ -160,6 +167,13 @@ pub async fn uninstall_helper(state: State<'_, AppState>) -> CmdResult<Operation
 /// 以管理员权限临时启动 helper（Windows / 未安装服务时）。
 #[tauri::command]
 pub async fn start_helper_elevated(state: State<'_, AppState>) -> CmdResult<OperationResult> {
+    let _operation = state.connection_operation.lock().await;
+    if state.engine.is_running().await {
+        return Err(CommandError::new(
+            "helper",
+            "请先断开连接再启动特权服务 / Disconnect before starting helper",
+        ));
+    }
     let helper_path = core_bin::resolve_helper(&state.app, &state.paths)
         .ok_or_else(|| CommandError::new("helper", "找不到 labvpn-helper"))?;
     let core = core_bin::resolve_core(&state.app, &state.paths)

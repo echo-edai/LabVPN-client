@@ -13,6 +13,7 @@ pub mod proxy_guard;
 pub mod proxy_lease;
 pub mod secrets;
 pub mod ssh_probe;
+pub mod startup;
 pub mod stats;
 pub mod subscription;
 pub mod update;

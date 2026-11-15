@@ -238,44 +238,6 @@ fn spawn_startup_tasks(app: tauri::AppHandle) {
     tauri::async_runtime::spawn(async move {
         let state = app.state::<AppState>();
         let _operation = state.connection_operation.lock().await;
-        if let Ok(token) = services::helper::read_token(&state.paths.token_file) {
-            if services::helper::ping(services::helper::default_port(), &token)
-                .await
-                .is_some()
-            {
-                if let Err(err) = services::helper::request_with_timeout(
-                    services::helper::default_port(),
-                    &token,
-                    labvpn_core::ipc::Command::StopCore,
-                    std::time::Duration::from_secs(10),
-                )
-                .await
-                {
-                    state
-                        .logs
-                        .warn("startup", format!("清理上次核心失败：{err}"));
-                }
-            }
-        }
-        if let Err(err) = services::proxy_lease::restore(&state.paths.data_dir) {
-            state
-                .logs
-                .warn("startup", format!("恢复代理环境失败：{err}"));
-        }
-        let mut config = state.config_snapshot();
-        if config.engine.connect_on_launch || config.engine.close_other_proxies {
-            config.engine.connect_on_launch = false;
-            config.engine.close_other_proxies = false;
-            if let Err(err) = state.save_config(config) {
-                state.logs.warn("startup", err.to_string());
-            }
-        }
-        state
-            .startup_ready
-            .store(true, std::sync::atomic::Ordering::Release);
-        state.logs.info(
-            "startup",
-            "干净启动完成：等待手动连接，不启动代理核心和校园隧道",
-        );
+        let _ = services::startup::recover(state.inner()).await;
     });
 }

@@ -62,6 +62,14 @@ async fn connect_locked(state: &AppState) -> CmdResult<ConnectResult> {
     let mut config = state.config_snapshot();
     if state.engine.is_running().await {
         let engine = state.engine.status().await;
+        if engine.state == "error" {
+            return Err(CommandError::new(
+                "engine",
+                engine
+                    .last_error
+                    .unwrap_or_else(|| "请先安全断开并恢复 / Safe disconnect is required".into()),
+            ));
+        }
         return Ok(ConnectResult {
             mode: engine.mode.clone().unwrap_or_default(),
             warnings: engine.warnings.clone(),
@@ -245,6 +253,19 @@ pub async fn disconnect(state: &AppState) -> CmdResult<EngineStatus> {
     let _ = state.vpn.stop(&config.campus_vpn).await;
     crate::services::proxy_lease::restore(&state.paths.data_dir)
         .map_err(|err| CommandError::new("systemProxy", err))?;
+    if status.state == "error" {
+        state.startup_ready.store(false, Ordering::Release);
+        return Err(CommandError::new(
+            "engine",
+            status
+                .last_error
+                .clone()
+                .unwrap_or_else(|| "核心停止未确认 / Core stop was not confirmed".into()),
+        ));
+    }
+    if !state.startup_ready.load(Ordering::Acquire) {
+        super::startup::recover(state).await?;
+    }
     state.logs.info("orchestrator", "已断开连接");
     Ok(status)
 }

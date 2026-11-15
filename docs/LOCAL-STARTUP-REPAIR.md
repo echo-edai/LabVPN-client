@@ -23,3 +23,5 @@ LabVPN 登录启动项保留；其 helper 可以空闲运行，但新版应用�
 没有实际重新启动电脑，不能把静态启动项验证表述为“已通过重启验收”。新版发布后还需验证原生应用的启动、连接、断开和退出。
 
 已将 Wi-Fi 的 WPAD 自动发现从 On 改为 Off。复查 scutil 有效状态：HTTP/HTTPS/SOCKS 为关闭，ProxyAutoDiscoveryEnable 为 0，原先的动态 PAC 项不再出现。Shadowrocket 的 OnDemandEnabled 为 FALSE，当前未连接。
+
+原生 v0.1.20 验收：安装包签名校验通过，helper 升级至 0.1.20；打开应用保持未连接，系统路由 HTTPS 返回 200；退出后仅空闲 helper 留存，无 mihomo 或 fdu-connect，手动代理与自动发现均关闭。验收发现启动项开关未同步系统，已在 v0.1.21 源码修正，待最终安装验证。
