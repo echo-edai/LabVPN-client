@@ -499,3 +499,23 @@ export interface SshTestResult {
 }
 
 export type SecretUpdates = Record<string, string>;
+
+export interface EnvironmentReport {
+  checkedAt: string;
+  startupReady: boolean;
+  connectionRequested: boolean;
+  coreRunning: boolean;
+  coreAlive: boolean;
+  corePid: number | null;
+  vpnState: string;
+  vpnPid: number | null;
+  proxyLeasePending: boolean;
+  autostart: boolean;
+  canDisableStartup: boolean;
+  proxies: string[];
+  proxySettings: string[];
+  startupItems: { label: string; domain: string; disabled: boolean | null }[];
+  environmentKeys: string[];
+  warnings: string[];
+  checks: { name: string; ok: boolean | null; elapsedMs: number; detail: string }[];
+}

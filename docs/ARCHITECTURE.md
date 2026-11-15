@@ -308,3 +308,9 @@ AppConfig {
 - **方案 B（完整）**：扩展内 `NEPacketTunnelProvider` 接管 packetFlow，转发给 mihomo / 内置代理核心
   （合规性最好，需重构 App ↔ NE ↔ 核心 IPC，预计 1–3 周）。
 - **跟踪**：GitHub issue #7 / milestone v0.3.0。
+
+## v0.1.20 生命周期与代理租约
+
+启动恢复、用户操作和自动恢复共享连接事务锁。启动不连接，`startup_ready` 标记恢复完成；`connection_requested` 独立保存用户意图，核心进程异常退出不会误清空恢复窗口，退出则先清除此意图。
+
+`services/proxy_lease.rs` 在接管前以 0600 原子保存各平台原值。恢复逐字段比较本次写入值，只改回仍匹配的字段，保留外部修改；失败项继续落盘。平台层负责捕获/读取/写入，命令层暴露环境检查和有限的一键操作。安全边界与异常终止限制见 RELEASE-v0.1.20.md。

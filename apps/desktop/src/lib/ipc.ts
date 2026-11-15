@@ -35,8 +35,7 @@ import type {
 } from "@/lib/types";
 
 /** 是否运行在 Tauri WebView 中。 */
-export const isTauri =
-  typeof window !== "undefined" && typeof window.__TAURI_INTERNALS__ !== "undefined";
+export const isTauri = typeof window !== "undefined" && typeof window.__TAURI_INTERNALS__ !== "undefined";
 
 export class IpcError extends Error {
   code: string;
@@ -82,8 +81,7 @@ export const api = {
     call<ConfigEnvelope>("save_config", { config, secrets }),
   resetConfig: () => call<ConfigEnvelope>("reset_config"),
   exportConfig: () => call<string>("export_config"),
-  importConfig: (json: string, secrets: SecretUpdates = {}) =>
-    call<ConfigEnvelope>("import_config", { json, secrets }),
+  importConfig: (json: string, secrets: SecretUpdates = {}) => call<ConfigEnvelope>("import_config", { json, secrets }),
   validateConfig: (config: AppConfig) => call<ValidationIssue[]>("validate_config", { config }),
   previewConfig: () => call<PreviewResult>("preview_config"),
   getPresets: () => call<PresetInfo[]>("get_presets"),
@@ -102,14 +100,12 @@ export const api = {
   setAiDomains: (domains: string[]) => call<string[]>("set_ai_domains", { domains }),
   getNodeCandidates: () => call<string[]>("get_node_candidates"),
   selectNode: (name: string) => call<OperationResult>("select_node", { name }),
-  selectProxy: (group: string, name: string) =>
-    call<OperationResult>("select_proxy", { group, name }),
+  selectProxy: (group: string, name: string) => call<OperationResult>("select_proxy", { group, name }),
   testProxyDelay: (name: string) => call<number>("test_proxy_delay", { name }),
 
   // 校园网
   getCampusStatus: (refresh = false) => call<CampusStatus>("get_campus_status", { refresh }),
-  setCampusOverride: (value: boolean | null) =>
-    call<CampusStatus>("set_campus_override", { value }),
+  setCampusOverride: (value: boolean | null) => call<CampusStatus>("set_campus_override", { value }),
   getCampusOverride: () => call<boolean | null>("campus_override"),
   refreshCampus: () => call<CampusStatus>("refresh_campus"),
   detectCampusNow: () => call<OperationResult>("detect_campus_now"),
@@ -138,6 +134,10 @@ export const api = {
   installHelper: () => call<OperationResult>("install_helper"),
   uninstallHelper: () => call<OperationResult>("uninstall_helper"),
   startHelperElevated: () => call<OperationResult>("start_helper_elevated"),
+  inspectEnvironment: (testNetwork = false) =>
+    call<import("@/lib/types").EnvironmentReport>("inspect_environment", { testNetwork }),
+  disableProxyStartup: () => call<OperationResult>("disable_proxy_startup"),
+  openStartupSettings: () => call<void>("open_startup_settings"),
   setSystemProxy: (enabled: boolean) => call<OperationResult>("set_system_proxy", { enabled }),
   getAutostart: () => call<boolean>("get_autostart"),
   setAutostart: (enabled: boolean) => call<OperationResult>("set_autostart", { enabled }),
@@ -148,8 +148,7 @@ export const api = {
 
   // 更新
   checkUpdate: () => call<UpdateInfo>("check_update"),
-  skipUpdateVersion: (version: string) =>
-    call<ConfigEnvelope>("skip_update_version", { version }),
+  skipUpdateVersion: (version: string) => call<ConfigEnvelope>("skip_update_version", { version }),
 };
 
 /** 订阅事件（浏览器预览下为空实现）。 */

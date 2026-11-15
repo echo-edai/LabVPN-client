@@ -182,16 +182,7 @@ export function Settings() {
               }}
               label={t("settings.autoLaunch")}
             />
-            <Switch
-              checked={draft.engine.connectOnLaunch}
-              onChange={(connectOnLaunch) =>
-                patch((current) => ({
-                  ...current,
-                  engine: { ...current.engine, connectOnLaunch },
-                }))
-              }
-              label={t("settings.connectOnLaunch")}
-            />
+            <p className="text-sm leading-6 text-ink-muted">{t("settings.cleanLaunchHint")}</p>
           </div>
         </Card>
 
@@ -311,17 +302,7 @@ export function Settings() {
                   onChange={(ipv6) => patch((current) => ({ ...current, engine: { ...current.engine, ipv6 } }))}
                   label={t("settings.ipv6")}
                 />
-                <Switch
-                  checked={draft.engine.closeOtherProxies}
-                  onChange={(closeOtherProxies) =>
-                    patch((current) => ({
-                      ...current,
-                      engine: { ...current.engine, closeOtherProxies },
-                    }))
-                  }
-                  label={t("settings.closeOtherProxies")}
-                  description={t("settings.closeOtherProxiesHint")}
-                />
+                <p className="text-sm leading-6 text-ink-muted">{t("settings.conflictsHint")}</p>
                 <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-card px-3 py-2">
                   <span className="text-[11.5px] text-ink-muted">
                     {system
@@ -378,8 +359,14 @@ export function Settings() {
             </div>
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
-            <Button size="sm" variant="primary" loading={busy === "helper"} onClick={() => void installHelper()}>
-              {t("settings.helperInstall")}
+            <Button
+              size="sm"
+              variant="primary"
+              disabled={Boolean(busy) || Boolean(engine?.running)}
+              loading={busy === "helper"}
+              onClick={() => void installHelper()}
+            >
+              {t(system?.helperInstalled ? "settings.helperUpdate" : "settings.helperInstall")}
             </Button>
             <Button size="sm" variant="secondary" onClick={() => void startHelperElevated()}>
               {t("settings.helperElevated")}

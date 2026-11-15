@@ -2,6 +2,51 @@ import type { MessageKey } from "./zh-CN";
 
 /** English copy. Missing keys fall back to 简体中文. */
 export const enUS: Partial<Record<MessageKey, string>> = {
+  "settings.helperUpdate": "Update / reinstall helper (disconnect first)",
+  "environment.networkCheckedAt": "Data checks at",
+  "environment.sshTitle": "Test a campus SSH server",
+  "environment.sshHost": "Server IP or hostname",
+  "environment.sshPort": "Port",
+  "environment.sshTest": "Check SSH banner",
+  "environment.sshHint":
+    "Reads an SSH banner over the current system route without credentials or login. Bare IP traffic may bypass LabVPN in system proxy mode. This does not test session longevity.",
+  "environment.campusDns": "Campus tunnel DNS response",
+  "settings.cleanLaunchHint":
+    "Opening LabVPN waits for a manual connection. Disconnecting or quitting stops its tunnels and restores the previous system proxy. Closing the window may keep the app in the menu bar, depending on your settings.",
+  "settings.conflictsHint":
+    "Connecting no longer forces other apps to quit. Inspect the proxy environment on Overview and manage unwanted login items in system settings.",
+  "environment.title": "Proxy environment and runtime",
+  "environment.subtitle": "Inspect processes, system proxies and startup services together",
+  "environment.check": "Check network",
+  "environment.disconnect": "Disconnect and restore",
+  "environment.disableStartup": "Disable other proxy startup",
+  "environment.startupSettings": "Open startup settings",
+  "environment.actionHint":
+    "Checks do not reconnect. Disabling startup affects recognized services only; administrator authorization is required for system services. Existing connections keep running.",
+  "environment.ready": "Clean startup complete",
+  "environment.recovering": "Recovering startup state",
+  "environment.core": "Proxy core",
+  "environment.noResponse": "Control API unresponsive",
+  "environment.stopped": "Stopped",
+  "environment.autostart": "Open app at login",
+  "environment.checkedAt": "Checked at",
+  "environment.systemRoute": "System route HTTPS (may use TUN)",
+  "environment.mixedProxy": "LabVPN proxy HTTPS",
+  "environment.skipped": "Skipped",
+  "environment.failed": "Failed",
+  "environment.notTested":
+    "No data checks in this snapshot. Use Check network to verify HTTPS. A single success does not establish SSH session stability.",
+  "environment.details": "Proxy, process and startup details",
+  "environment.processes": "Other recognized proxy processes",
+  "environment.noneDetected": "None recognized in this check; other proxies may exist",
+  "environment.settings": "Network service proxies",
+  "environment.startupItems": "Recognized startup services",
+  "environment.disabled": "Disabled",
+  "environment.enabled": "Startup allowed",
+  "environment.unknown": "Not confirmed",
+  "environment.coverage":
+    "This list covers recognized services only. Review login items, VPN extensions and managed policies in system settings.",
+  "environment.variables": "Inherited proxy environment variables (names only)",
   "common.appName": "LabVPN",
   "common.tagline": "Campus · Subscription · SSH, one split router",
   "common.next": "Next",

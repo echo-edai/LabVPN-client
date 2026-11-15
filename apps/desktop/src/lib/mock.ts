@@ -213,21 +213,74 @@ let vpn: VpnStatus = {
 let campus = campusStatus();
 
 const presets: PresetInfo[] = [
-  { id: "smart", label: "智能分流", description: "校内走 VPN、国内直连、国外走订阅，自动处理 SSH", recommended: true, chinaDirect: true, adblock: false },
-  { id: "minimal", label: "极简模式", description: "仅区分校内 / SSH / 订阅三类出口，不做国内直连", recommended: false, chinaDirect: false, adblock: false },
-  { id: "strict", label: "严格分流", description: "开启广告拦截，国内域名与 IP 直连，其余全部走订阅", recommended: false, chinaDirect: true, adblock: true },
-  { id: "global", label: "全局代理", description: "所有流量都走代理（仍保留防环与局域网直连）", recommended: false, chinaDirect: false, adblock: false },
-  { id: "direct", label: "全部直连", description: "全部直连，仅用于排查网络问题", recommended: false, chinaDirect: false, adblock: false },
+  {
+    id: "smart",
+    label: "智能分流",
+    description: "校内走 VPN、国内直连、国外走订阅，自动处理 SSH",
+    recommended: true,
+    chinaDirect: true,
+    adblock: false,
+  },
+  {
+    id: "minimal",
+    label: "极简模式",
+    description: "仅区分校内 / SSH / 订阅三类出口，不做国内直连",
+    recommended: false,
+    chinaDirect: false,
+    adblock: false,
+  },
+  {
+    id: "strict",
+    label: "严格分流",
+    description: "开启广告拦截，国内域名与 IP 直连，其余全部走订阅",
+    recommended: false,
+    chinaDirect: true,
+    adblock: true,
+  },
+  {
+    id: "global",
+    label: "全局代理",
+    description: "所有流量都走代理（仍保留防环与局域网直连）",
+    recommended: false,
+    chinaDirect: false,
+    adblock: false,
+  },
+  {
+    id: "direct",
+    label: "全部直连",
+    description: "全部直连，仅用于排查网络问题",
+    recommended: false,
+    chinaDirect: false,
+    adblock: false,
+  },
 ];
 
 let logs: LogEntry[] = [
-  { id: 1, ts: "19:41:02", level: "info", source: "app", message: "LabVPN 启动：配置版本 1，核心 Mihomo Meta v1.19.32（resource）" },
+  {
+    id: 1,
+    ts: "19:41:02",
+    level: "info",
+    source: "app",
+    message: "LabVPN 启动：配置版本 1，核心 Mihomo Meta v1.19.32（resource）",
+  },
   { id: 2, ts: "19:41:02", level: "info", source: "campus", message: "校园网检测：校内网络（置信度 86%）" },
   { id: 3, ts: "19:41:03", level: "info", source: "vpn", message: "检测到已有 fdu-connect 实例，复用现有 SOCKS 出口" },
   { id: 4, ts: "19:41:04", level: "info", source: "core", message: "已通过特权 helper 启动 TUN 核心" },
   { id: 5, ts: "19:41:06", level: "info", source: "core", message: "核心就绪：Mihomo Meta v1.19.32（控制端口 9097）" },
-  { id: 6, ts: "19:41:06", level: "info", source: "orchestrator", message: "连接完成：mode=tun 校内=true vpn=reusing mixed-port=7897" },
-  { id: 7, ts: "19:41:07", level: "warn", source: "core", message: "已启用 geo 规则：首次运行需下载 geosite/geoip 数据（约 20MB）" },
+  {
+    id: 6,
+    ts: "19:41:06",
+    level: "info",
+    source: "orchestrator",
+    message: "连接完成：mode=tun 校内=true vpn=reusing mixed-port=7897",
+  },
+  {
+    id: 7,
+    ts: "19:41:07",
+    level: "warn",
+    source: "core",
+    message: "已启用 geo 规则：首次运行需下载 geosite/geoip 数据（约 20MB）",
+  },
   { id: 8, ts: "19:42:11", level: "info", source: "vpn", message: "KeepAlive: OK" },
   { id: 9, ts: "19:45:30", level: "info", source: "subscription", message: "订阅已更新：68 个节点，12 个代理组" },
   { id: 10, ts: "19:46:00", level: "info", source: "engine", message: "切换代理组：🎓 校内 -> DIRECT" },
@@ -398,10 +451,7 @@ rules:
 
 const preview = (): PreviewResult => ({
   yaml: previewYaml,
-  warnings: [
-    "已启用 geo 规则：首次运行需下载 geosite/geoip 数据（约 20MB）",
-    "检测到校园网：已跳过 VPN，校内流量直连",
-  ],
+  warnings: ["已启用 geo 规则：首次运行需下载 geosite/geoip 数据（约 20MB）", "检测到校园网：已跳过 VPN，校内流量直连"],
   stats: { proxyCount: 2, groupCount: 6, providerCount: 5, ruleCount: 28, tunEnabled: true },
   rules: [
     "DOMAIN,stuvpn.fudan.edu.cn,DIRECT",
@@ -439,14 +489,16 @@ function operation(message: string): OperationResult {
   return { ok: true, message, detail: null };
 }
 
-const trafficEngine = (): ProxyGroupInfo[] =>
-  proxyGroups().filter((group) => group.kind === "Selector");
+const trafficEngine = (): ProxyGroupInfo[] => proxyGroups().filter((group) => group.kind === "Selector");
 
 /** Mock 命令分发。 */
 function mockAiExposure(range: string): AiExposureData {
   const now = Math.floor(Date.now() / 1000);
   const hour = 3600;
-  const definitions: Record<string, { ip: string; node: string; hoursAgo: number; durationMin: number; host: string }[]> = {
+  const definitions: Record<
+    string,
+    { ip: string; node: string; hoursAgo: number; durationMin: number; host: string }[]
+  > = {
     "chatgpt.com": [
       { ip: "203.0.113.20", node: "HK-01", hoursAgo: 20, durationMin: 240, host: "chatgpt.com" },
       { ip: "203.0.113.22", node: "🇯🇵 日本 02", hoursAgo: 8, durationMin: 90, host: "chatgpt.com" },
@@ -456,12 +508,8 @@ function mockAiExposure(range: string): AiExposureData {
       { ip: "203.0.113.31", node: "US-01", hoursAgo: 18, durationMin: 120, host: "api.openai.com" },
       { ip: "198.51.100.7", node: "🇸🇬 新加坡 03", hoursAgo: 6, durationMin: 60, host: "platform.openai.com" },
     ],
-    "claude.ai": [
-      { ip: "203.0.113.31", node: "🇺🇸 美国 01", hoursAgo: 12, durationMin: 180, host: "claude.ai" },
-    ],
-    "anthropic.com": [
-      { ip: "203.0.113.31", node: "🇺🇸 美国 01", hoursAgo: 11, durationMin: 30, host: "anthropic.com" },
-    ],
+    "claude.ai": [{ ip: "203.0.113.31", node: "🇺🇸 美国 01", hoursAgo: 12, durationMin: 180, host: "claude.ai" }],
+    "anthropic.com": [{ ip: "203.0.113.31", node: "🇺🇸 美国 01", hoursAgo: 11, durationMin: 30, host: "anthropic.com" }],
     "gemini.google.com": [],
   };
   const series: AiDomainSeries[] = Object.entries(definitions).map(([domain, entries]) => {
@@ -534,7 +582,7 @@ function mockAnalytics(range: string): AnalyticsData {
     },
   );
   const egress = Array.from({ length: hourly ? 8 : 12 }, (_, i) => {
-    const ts = now - (hourly ? 3600 : 86_400) * (hourly ? 3 : 1) * (i + 1) / (hourly ? 1 : 1);
+    const ts = now - ((hourly ? 3600 : 86_400) * (hourly ? 3 : 1) * (i + 1)) / (hourly ? 1 : 1);
     return {
       ts: Math.floor(ts),
       route: i % 2 === 0 ? "proxy" : "direct",
@@ -650,7 +698,14 @@ export async function mockInvoke(cmd: string, args?: Record<string, unknown>): P
       } satisfies DiagnosticsResult;
     }
     case "start_engine": {
-      engine = { ...engine, state: "running", running: true, mode: config.engine.tun.enabled ? "tun" : "systemProxy", startedAt: now(), pid: 51234 };
+      engine = {
+        ...engine,
+        state: "running",
+        running: true,
+        mode: config.engine.tun.enabled ? "tun" : "systemProxy",
+        startedAt: now(),
+        pid: 51234,
+      };
       vpn = { ...vpn, state: "running" };
       pushLog("info", "orchestrator", "连接完成：mode=tun 校内=true");
       return outcome(true);
@@ -705,7 +760,12 @@ export async function mockInvoke(cmd: string, args?: Record<string, unknown>): P
     }
     case "set_campus_override": {
       const value = args?.value as boolean | null;
-      campus = { ...campusStatus(), onCampus: value ?? true, manualOverride: value, confidence: value === null ? 0.86 : 1 };
+      campus = {
+        ...campusStatus(),
+        onCampus: value ?? true,
+        manualOverride: value,
+        confidence: value === null ? 0.86 : 1,
+      };
       return campus;
     }
     case "campus_override":
@@ -751,13 +811,47 @@ export async function mockInvoke(cmd: string, args?: Record<string, unknown>): P
       return {
         ok: true,
         message: "登录成功：账号密码有效，VPN 服务可用",
-        logLines: ["Start FDU Connect v0.9.0", "VPN server version: M7.6.8R2", "SOCKS5 server listening on 127.0.0.1:11181", "KeepAlive: OK"],
+        logLines: [
+          "Start FDU Connect v0.9.0",
+          "VPN server version: M7.6.8R2",
+          "SOCKS5 server listening on 127.0.0.1:11181",
+          "KeepAlive: OK",
+        ],
       } satisfies VpnTestResult;
     }
     case "test_ssh": {
       await delay(400);
       return { ok: true, message: "TCP 连接成功（SSH 端口可达）", elapsedMs: 38 } satisfies SshTestResult;
     }
+    case "inspect_environment":
+      return {
+        checkedAt: new Date().toISOString(),
+        startupReady: true,
+        connectionRequested: engine.running,
+        coreRunning: engine.running,
+        coreAlive: engine.running,
+        corePid: engine.pid,
+        vpnState: vpn.state,
+        vpnPid: vpn.pid,
+        proxyLeasePending: false,
+        autostart: false,
+        canDisableStartup: false,
+        proxies: [],
+        proxySettings: ["Preview: system settings are not read"],
+        startupItems: [],
+        environmentKeys: [],
+        warnings: [],
+        checks: args?.testNetwork
+          ? [
+              { name: "systemRoute", ok: null, elapsedMs: 0, detail: "Browser preview: no real network check" },
+              { name: "mixedProxy", ok: null, elapsedMs: 0, detail: "Browser preview: no real proxy check" },
+            ]
+          : [],
+      };
+    case "open_startup_settings":
+      return operation("Preview: system settings are not opened");
+    case "disable_proxy_startup":
+      return operation("Preview: startup services are not changed");
     case "get_system_info":
       return systemInfo();
     case "install_helper":
@@ -781,7 +875,11 @@ export async function mockInvoke(cmd: string, args?: Record<string, unknown>): P
     case "open_path":
       return operation("已打开");
     case "export_diagnostics":
-      return { ok: true, message: "诊断包已导出", detail: "~/Library/Application Support/app.labvpn.desktop/logs/diagnostics-demo.json" } satisfies OperationResult;
+      return {
+        ok: true,
+        message: "诊断包已导出",
+        detail: "~/Library/Application Support/app.labvpn.desktop/logs/diagnostics-demo.json",
+      } satisfies OperationResult;
     case "sync_subscription":
       return operation("订阅已更新：68 个节点");
     default:

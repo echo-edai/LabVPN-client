@@ -42,8 +42,8 @@ jobs:
       - name: Format check
         run: cargo fmt --all -- --check
 
-      - name: Unit tests (pure logic)
-        run: cargo test -p labvpn-core --all-targets
+      - name: Workspace unit tests
+        run: cargo test --workspace --all-targets --locked
 
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings

@@ -1,6 +1,7 @@
 import { ArrowRight, RefreshCw, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 
+import { EnvironmentPanel } from "@/components/features/EnvironmentPanel";
 import { ConnectHero } from "@/components/features/ConnectHero";
 import { DiagnosticsPanel } from "@/components/features/DiagnosticsPanel";
 import { ProxyGroups } from "@/components/features/ProxyGroups";
@@ -62,6 +63,8 @@ export function Dashboard() {
           </div>
           <CampusCard compact />
         </div>
+
+        <EnvironmentPanel />
 
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
           <div className="xl:col-span-2">
