@@ -161,6 +161,19 @@ pub async fn inspect(state: &AppState, test_network: bool) -> CmdResult<Environm
     })
 }
 
+/// 恢复期间只需一个出口可用；不因单个站点故障重启核心。
+pub(super) async fn recovery_data_alive(port: u16) -> bool {
+    let (route, proxy) = tokio::join!(
+        check_https("systemRoute", "https://www.baidu.com/", None),
+        check_https(
+            "mixedProxy",
+            "https://www.gstatic.com/generate_204",
+            Some(port)
+        ),
+    );
+    route.ok == Some(true) || proxy.ok == Some(true)
+}
+
 async fn check_https(name: &str, url: &str, proxy: Option<u16>) -> NetworkCheck {
     let started = Instant::now();
     let result = async {

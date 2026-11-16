@@ -117,14 +117,22 @@ pub fn set_autostart(app: &AppHandle, enabled: bool) -> Result<(), String> {
     }
 }
 
-/// 端口是否可绑定（用于冲突检测）。
-pub fn port_available(port: u16) -> bool {
-    std::net::TcpListener::bind(("127.0.0.1", port)).is_ok()
+/// 是否接受 TCP 连接；绑定权限和连接回收状态不等于活跃监听。
+pub fn port_in_use(port: u16) -> bool {
+    std::net::TcpStream::connect_timeout(
+        &std::net::SocketAddr::from(([127, 0, 0, 1], port)),
+        std::time::Duration::from_millis(200),
+    )
+    .is_ok()
 }
 
-/// 端口是否已被监听。
-pub fn port_in_use(port: u16) -> bool {
-    !port_available(port)
+/// 普通权限核心的绑定探测；Unix 允许复用回收中的地址，仍须确认能够监听。
+pub(crate) fn probe_local_listener(port: u16) -> std::io::Result<()> {
+    let socket = tokio::net::TcpSocket::new_v4()?;
+    #[cfg(unix)]
+    socket.set_reuseaddr(true)?;
+    socket.bind(std::net::SocketAddr::from(([127, 0, 0, 1], port)))?;
+    socket.listen(1).map(drop)
 }
 
 /// 创建子进程命令：Windows 下隐藏控制台窗口（避免 GUI 应用闪现黑框/抢焦点）。

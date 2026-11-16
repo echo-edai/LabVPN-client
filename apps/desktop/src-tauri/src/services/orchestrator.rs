@@ -94,12 +94,6 @@ async fn connect_locked(state: &AppState) -> CmdResult<ConnectResult> {
     // 0) 清理上次异常退出遗留的核心（避免端口被自己的旧进程占用）
     crate::services::engine::cleanup_stale_core(&state.paths.core_dir);
 
-    // 冲突通过环境检查展示，不在连接时强制结束其他程序。
-    // 0.5) 端口冲突自动避让（Clash Verge / Shadowrocket / 其他 mihomo 常占用 7897）
-    if !state.engine.is_running().await {
-        choose_ports(&mut config, &mut warnings);
-    }
-
     // 1) 校园网检测
     let campus_status = if config.campus_vpn.auto_detect_campus {
         campus::detect(state).await
@@ -148,6 +142,20 @@ async fn connect_locked(state: &AppState) -> CmdResult<ConnectResult> {
             "TUN 模式需要安装特权 helper（设置页可一键安装）。当前已回退系统代理模式".to_string(),
         );
     }
+
+    // 先确认自己的旧核心退出，再按实际运行权限探测端口。
+    if mode == EngineMode::Tun {
+        helper::stop_core(helper_port, &helper_token).await?;
+    }
+    let (mixed, controller, port_warnings) = super::ports::choose(
+        config.engine.mixed_port,
+        config.engine.controller_port,
+        mode == EngineMode::Tun,
+    )
+    .await?;
+    config.engine.mixed_port = mixed;
+    config.engine.controller_port = controller;
+    warnings.extend(port_warnings);
 
     // 4) 运行时上下文 + 生成配置
     let built = build_runtime(state, &config, on_campus, mode == EngineMode::Tun).await?;
@@ -389,16 +397,14 @@ pub async fn on_campus_changed(app: &AppHandle) {
     }
 }
 
-/// 核心自动恢复：每 15 秒检查一次，App 认为「已连接」但 mihomo 控制端口无响应时，
-/// 自动执行一次完整重连（disconnect + connect），恢复 TUN/路由。
-///
-/// 触发场景：helper 被重新安装/重启、mihomo 崩溃、系统唤醒后核心丢失。此时旧 SSH 会话
-/// 已随 TUN 接口消失而断开（EADDRNOTAVAIL），重连后新连接即可恢复。
+/// 每 15 秒检查核心；网络变化或长时间暂停后额外复核真实 HTTPS 通路。
+/// 等待物理地址稳定，避免唤醒期间抢跑；沿用十分钟最多三次的恢复预算。
 pub fn spawn_engine_watchdog(app: AppHandle) {
     const WINDOW: Duration = Duration::from_secs(10 * 60);
     tauri::async_runtime::spawn(async move {
         let mut history: Vec<Instant> = Vec::new();
         let mut cap_logged = false;
+        let mut resume = super::resume::ResumeRecovery::new(std::time::SystemTime::now());
         loop {
             tokio::time::sleep(Duration::from_secs(15)).await;
             let state = app.state::<AppState>();
@@ -410,9 +416,24 @@ pub fn spawn_engine_watchdog(app: AppHandle) {
             {
                 history.clear();
                 cap_logged = false;
+                resume.reset(std::time::SystemTime::now());
                 continue;
             }
-            if state.engine.core_alive().await {
+            let path = tokio::task::spawn_blocking(super::resume::physical_path).await;
+            let Ok(path) = path else {
+                continue;
+            };
+            if !resume.observe(std::time::SystemTime::now(), path) {
+                continue;
+            }
+            let alive = state.engine.core_alive().await;
+            let data_failed = if alive && resume.needs_check() {
+                let port = state.engine.status().await.mixed_port;
+                resume.checked(super::environment::recovery_data_alive(port).await)
+            } else {
+                false
+            };
+            if alive && !data_failed {
                 history.retain(|when| when.elapsed() < WINDOW);
                 continue;
             }
@@ -423,7 +444,7 @@ pub fn spawn_engine_watchdog(app: AppHandle) {
                     cap_logged = true;
                     state.logs.error(
                         "engine",
-                        "[核心自动恢复] 核心无响应且 10 分钟内已自动恢复 3 次，暂停恢复；请手动重连或检查网络",
+                        "[核心自动恢复] 核心或数据通路异常，10 分钟内已自动恢复 3 次，暂停恢复；请手动检查 / Recovery limit reached; check network",
                     );
                 }
                 continue;
@@ -431,9 +452,16 @@ pub fn spawn_engine_watchdog(app: AppHandle) {
             history.push(now);
             state.logs.warn(
                 "engine",
-                "[核心自动恢复] 检测到 TUN 核心无响应（helper/core 可能被重启），自动恢复连接…",
+                if data_failed {
+                    "[网络恢复] 网络变化或长时间暂停后，控制 API 存活但两条 HTTPS 通路连续两轮失败，重建核心 / Data paths failed after network change or pause"
+                } else {
+                    "[核心自动恢复] 核心无响应，物理网络已稳定，自动恢复连接 / Core unresponsive; physical network is stable"
+                },
             );
-            stop_core(&state).await;
+            if stop_core(&state).await.state == "error" {
+                continue;
+            }
+            resume.reset(std::time::SystemTime::now());
             let result = connect_locked(&state).await;
             match result {
                 Ok(_) => state
@@ -747,32 +775,6 @@ pub async fn rule_plan(state: &AppState) -> CmdResult<labvpn_core::rules::RulePl
     .await?;
     let generated = generator::generate(&config, &built.context)?;
     Ok(generated.plan)
-}
-
-/// 端口被其他程序占用时自动切换到邻近空闲端口，并给出提示。
-fn choose_ports(config: &mut AppConfig, warnings: &mut Vec<String>) {
-    config.engine.mixed_port = pick_free_port(config.engine.mixed_port, "混合代理端口", warnings);
-    config.engine.controller_port =
-        pick_free_port(config.engine.controller_port, "控制端口", warnings);
-}
-
-fn pick_free_port(preferred: u16, label: &str, warnings: &mut Vec<String>) -> u16 {
-    if !platform::port_in_use(preferred) {
-        return preferred;
-    }
-    let upper = preferred.saturating_add(50).min(u16::MAX - 1);
-    for candidate in preferred.saturating_add(1)..=upper {
-        if candidate > 1024 && !platform::port_in_use(candidate) {
-            warnings.push(format!(
-                "{label} {preferred} 已被其他程序占用，本次连接自动使用 {candidate}（可在设置中修改）"
-            ));
-            return candidate;
-        }
-    }
-    warnings.push(format!(
-        "{label} {preferred} 被占用且附近没有可用端口，请手动修改端口"
-    ));
-    preferred
 }
 
 #[cfg(test)]
