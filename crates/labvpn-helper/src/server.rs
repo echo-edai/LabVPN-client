@@ -109,7 +109,13 @@ fn dispatch(command: Command, supervisor: &Supervisor) -> (Response, bool) {
                 false,
             ),
         },
-        Command::StopCore => (Response::success().with_status(supervisor.stop()), false),
+        Command::StopCore => (
+            match supervisor.stop() {
+                Ok(status) => Response::success().with_status(status),
+                Err(err) => Response::failure(err),
+            },
+            false,
+        ),
         Command::ConfirmCoreReady { pid, generation } => {
             let response = match supervisor.confirm_ready(pid, generation) {
                 Ok(status) => Response::success().with_status(status),
@@ -121,8 +127,10 @@ fn dispatch(command: Command, supervisor: &Supervisor) -> (Response, bool) {
             config_yaml,
             assets,
         } => {
-            let _ = supervisor.stop();
-            match supervisor.start(&config_yaml, &assets) {
+            match supervisor
+                .stop()
+                .and_then(|_| supervisor.start(&config_yaml, &assets))
+            {
                 Ok(status) => (Response::success().with_status(status), false),
                 Err(err) => (
                     Response::failure(err).with_status(supervisor.status()),
@@ -131,9 +139,9 @@ fn dispatch(command: Command, supervisor: &Supervisor) -> (Response, bool) {
             }
         }
         Command::Status => (Response::success().with_status(supervisor.status()), false),
-        Command::Shutdown => {
-            let _ = supervisor.stop();
-            (Response::success(), true)
-        }
+        Command::Shutdown => match supervisor.stop() {
+            Ok(_) => (Response::success(), true),
+            Err(err) => (Response::failure(err), false),
+        },
     }
 }

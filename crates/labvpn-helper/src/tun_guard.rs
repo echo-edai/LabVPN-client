@@ -28,9 +28,6 @@ use crate::supervisor::Supervisor;
 /// 巡检间隔。
 #[cfg(target_os = "macos")]
 const CHECK_INTERVAL: Duration = Duration::from_secs(3);
-/// 核心启动后的静默期：等 mihomo 自己把路由装完，避免抢跑。
-#[cfg(target_os = "macos")]
-const STARTUP_GRACE_SECS: u64 = 5;
 
 /// 一个 IPv4 CIDR（网络地址已按前缀长度对齐）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -310,21 +307,13 @@ fn is_tunnel_interface(name: &str) -> bool {
     name.starts_with("utun") || name.starts_with("tun")
 }
 
-/// 当前路由表里缺失的期望路由（按期望顺序返回）。
+/// 只补不存在的前缀，不覆盖其他接口已有的同前缀路由。
 #[cfg(any(target_os = "macos", test))]
-fn missing_routes(
-    plan: &TunRoutePlan,
-    routes: &[InstalledRoute],
-    interface: &str,
-) -> Vec<Ipv4Cidr> {
+fn missing_routes(plan: &TunRoutePlan, routes: &[InstalledRoute]) -> Vec<Ipv4Cidr> {
     plan.expected
         .iter()
         .copied()
-        .filter(|expected| {
-            !routes
-                .iter()
-                .any(|route| route.destination == *expected && route.interface == interface)
-        })
+        .filter(|expected| !routes.iter().any(|route| route.destination == *expected))
         .collect()
 }
 
@@ -352,35 +341,37 @@ pub fn spawn(supervisor: Arc<Supervisor>) {
 
 #[cfg(target_os = "macos")]
 fn watch(supervisor: Arc<Supervisor>) {
-    // 首轮多等一会儿，避免和 mihomo 自己的路由安装抢跑
-    std::thread::sleep(Duration::from_secs(2));
     loop {
-        let status = supervisor.status();
-        if status.running && status.uptime_secs.unwrap_or(0) >= STARTUP_GRACE_SECS {
-            if let Some(plan) = supervisor.tun_plan() {
-                if !plan.expected.is_empty() {
-                    if let Err(err) = reconcile(&plan) {
-                        logging::warn(format!("TUN 自动路由巡检失败：{err}"));
-                    }
-                }
-            }
+        if let Err(err) = reconcile(&supervisor) {
+            logging::warn(format!("TUN 自动路由巡检失败：{err}"));
         }
         std::thread::sleep(CHECK_INTERVAL);
     }
 }
 
 #[cfg(target_os = "macos")]
-fn reconcile(plan: &TunRoutePlan) -> Result<(), String> {
+fn reconcile(supervisor: &Supervisor) -> Result<(), String> {
+    let Some((generation, plan)) =
+        supervisor.with_ready_tun(None, |generation, plan| (generation, plan.clone()))
+    else {
+        return Ok(());
+    };
     let routes = read_route_table()?;
-    let Some(interface) = tunnel_interface(plan, &routes) else {
+    let Some(interface) = tunnel_interface(&plan, &routes) else {
         // TUN 尚未就绪（或并非本会话的 TUN）：下轮再看
         return Ok(());
     };
 
     let mut repaired: Vec<String> = Vec::new();
     let mut failed: Vec<String> = Vec::new();
-    for expected in missing_routes(plan, &routes, &interface) {
-        match install_route(expected, &interface) {
+    for expected in missing_routes(&plan, &routes) {
+        // 读路由表后会话可能已切换；每次写入前在启停锁内复核会话。
+        let Some(result) =
+            supervisor.with_ready_tun(Some(generation), |_, _| install_route(expected, &interface))
+        else {
+            break;
+        };
+        match result {
             Ok(()) => repaired.push(expected.to_string()),
             Err(err) => failed.push(format!("{expected}: {err}")),
         }
@@ -421,33 +412,14 @@ fn read_route_table() -> Result<Vec<InstalledRoute>, String> {
 #[cfg(target_os = "macos")]
 fn install_route(destination: Ipv4Cidr, interface: &str) -> Result<(), String> {
     let destination = destination.to_string();
-    let add = std::process::Command::new(ROUTE_BIN)
+    let output = std::process::Command::new(ROUTE_BIN)
         .args(["-n", "add", "-net", &destination, "-interface", interface])
         .output()
         .map_err(|err| format!("执行 route add 失败：{err}"))?;
-    if add.status.success() {
+    if output.status.success() {
         return Ok(());
     }
-    // 目标前缀可能已存在于别的接口（file exists），尝试改指到 TUN
-    let change = std::process::Command::new(ROUTE_BIN)
-        .args([
-            "-n",
-            "change",
-            "-net",
-            &destination,
-            "-interface",
-            interface,
-        ])
-        .output()
-        .map_err(|err| format!("执行 route change 失败：{err}"))?;
-    if change.status.success() {
-        return Ok(());
-    }
-    Err(format!(
-        "{} / {}",
-        String::from_utf8_lossy(&add.stderr).trim(),
-        String::from_utf8_lossy(&change.stderr).trim()
-    ))
+    Err(String::from_utf8_lossy(&output.stderr).trim().to_string())
 }
 
 #[cfg(test)]
@@ -663,7 +635,7 @@ default            192.168.3.1        UGScg                 en0
             complete.push_str(&format!("{prefix} 198.18.0.1 UGSc utun11\n"));
         }
         let routes = parse_route_table(&complete);
-        assert!(missing_routes(&plan, &routes, "utun11").is_empty());
+        assert!(missing_routes(&plan, &routes).is_empty());
 
         // 模拟运行期丢失下半区中的 8.0.0.0/5（覆盖 10.0.0.0/8 的那条）
         let mut partial = String::from("default 192.168.3.1 UGScg en0\n");
@@ -675,8 +647,19 @@ default            192.168.3.1        UGScg                 en0
         }
         let routes = parse_route_table(&partial);
         assert_eq!(
-            missing_routes(&plan, &routes, "utun11"),
+            missing_routes(&plan, &routes),
             vec![Ipv4Cidr::parse("8.0.0.0/5").expect("prefix")]
         );
+    }
+
+    #[test]
+    fn existing_prefix_on_other_interface_is_not_repaired() {
+        let prefix = Ipv4Cidr::parse("1.0.0.0/8").unwrap();
+        let plan = TunRoutePlan {
+            expected: vec![prefix],
+            excluded: vec![],
+        };
+        let routes = parse_route_table("1 198.51.100.1 UGSc utun4\n");
+        assert!(missing_routes(&plan, &routes).is_empty());
     }
 }

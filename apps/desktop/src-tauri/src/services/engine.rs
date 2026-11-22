@@ -140,9 +140,9 @@ impl EngineManager {
 
         inner.status = EngineStatus {
             state: "starting".to_string(),
-            mode: Some(request.mode.as_str().to_string()),
+            mode: None,
             running: false,
-            tun_enabled: request.mode == EngineMode::Tun,
+            tun_enabled: false,
             helper_mode: request.mode == EngineMode::Tun,
             mixed_port: request.mixed_port,
             controller_port: request.controller_port,
@@ -314,7 +314,7 @@ impl EngineManager {
         self.logs.info(
             "core",
             format!(
-                "核心就绪：{version}（控制端口 {}）",
+                "核心控制 API 就绪：{version}（端口 {}）",
                 request.controller_port
             ),
         );
@@ -336,6 +336,20 @@ impl EngineManager {
 
         // helper 仅在收到当前会话的就绪确认后清理，禁止定时删除新会话文件。
         if request.mode == EngineMode::Tun {
+            if !api.wait_tun_ready(Duration::from_secs(8)).await {
+                let mut error = CommandError::new(
+                    "tun_not_ready",
+                    "TUN 未就绪，请在运行日志中检查核心和路由冲突 / TUN not ready; check the core log for route conflicts",
+                );
+                self.logs.error("core", error.message.clone());
+                if let Some(cleanup_error) = self.cleanup_locked(&mut inner).await {
+                    error = error.with_detail(cleanup_error);
+                }
+                inner.status.state = "error".to_string();
+                inner.status.last_error = Some(error.to_string());
+                self.emit_status(&inner.status);
+                return Err(error);
+            }
             let session = helper_session.as_ref();
             let identity = session.and_then(|status| status.pid.zip(status.config_generation));
             let result = match identity {
@@ -359,6 +373,7 @@ impl EngineManager {
                 return Err(err);
             }
             inner.status.pid = session.and_then(|status| status.pid);
+            inner.status.tun_enabled = true;
         }
 
         // 安全清理：核心已完成配置解析，销毁含敏感字段的配置与私钥资产
@@ -396,6 +411,7 @@ impl EngineManager {
 
         inner.api = Some(api);
         inner.status.state = "running".to_string();
+        inner.status.mode = Some(request.mode.as_str().to_string());
         inner.status.running = true;
         inner.status.started_at =
             Some(chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string());
@@ -529,6 +545,15 @@ impl EngineManager {
             .await
             .map(|result| result.is_ok())
             .unwrap_or(false)
+    }
+
+    /// 区分明确停用和读取失败，避免一次控制请求异常触发恢复。
+    pub async fn tun_active(&self) -> Option<bool> {
+        let api = self.api().await?;
+        tokio::time::timeout(Duration::from_secs(2), api.tun_active())
+            .await
+            .ok()?
+            .ok()
     }
 
     /// 设置校内外分流组选中项（不重启内核）。

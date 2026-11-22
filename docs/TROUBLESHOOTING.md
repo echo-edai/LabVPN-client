@@ -182,6 +182,14 @@ v0.1.14 起 App 每 15 秒检查一次：**KeepAlive 连续失败 3 次即自动
 
 排查顺序：日志页看 `core` 源的最后几行 → 确认端口占用 → 关闭其他代理软件 → 重试。
 
+### 控制端口可用但 TUN 并未接管
+
+macOS 上 `Start TUN listening error: ... add route: 1.0.0.0/8: file exists` 表示 TUN 启动时发生路由冲突。mihomo 可能仍提供控制 API 和混合代理端口，但未安装 TUN 路由。旧版可能显示「TUN 全流量」，未显式使用代理的连接则仍可能从物理网卡直接出去。
+
+- 修复版要求控制 API 返回实际启用的 TUN 和自动路由，才报告连接成功；初始化失败会清理失败的核心会话，并提示检查日志，不会把混合端口可用当成 TUN 就绪。
+- 先结束依赖 LabVPN 的重要连接，再退出旧版、启动修复版，并在「设置 → 特权服务」更新 helper 后重连。若仍出现 `file exists`，查「运行日志 → 核心」，确认是否另有 TUN/VPN 使用同一前缀；不要清空路由表或删除归属不明的路由。
+- 若服务显示地区不可用，浏览器或回显站点的 IP 不是该应用请求的出口证据。客户端日志可证明被 mihomo 观测到的请求命中哪条规则，但不能证明远端服务采用了哪些定位信号。Claude 的可用性另受 [Anthropic 支持地区政策](https://www.anthropic.com/legal/supported-regions) 约束；如在支持地区仍遇误判，联系 [Claude 支持](https://support.claude.com/en/articles/9015913-how-to-get-support)。
+
 ## 为什么 macOS「系统设置 → VPN」里没有 LabVPN？
 
 - 能在系统设置 VPN 列表里出现的应用（如 Shadowrocket、ClashX Pro）使用的是

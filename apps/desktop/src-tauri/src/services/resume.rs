@@ -8,6 +8,7 @@ pub(super) struct ResumeRecovery {
     pending: bool,
     stable: u8,
     failures: u8,
+    tun_failures: u8,
 }
 
 impl ResumeRecovery {
@@ -18,6 +19,7 @@ impl ResumeRecovery {
             pending: false,
             stable: 0,
             failures: 0,
+            tun_failures: 0,
         }
     }
 
@@ -34,6 +36,7 @@ impl ResumeRecovery {
             self.pending = true;
             self.stable = 0;
             self.failures = 0;
+            self.tun_failures = 0;
         }
         self.last_poll = now;
         self.path = path;
@@ -58,6 +61,16 @@ impl ResumeRecovery {
         }
         self.failures = self.failures.saturating_add(1);
         self.failures >= 2
+    }
+
+    /// TUN 停用和普通 HTTPS 失败分别计数；直连可达不等于 TUN 正常。
+    pub(super) fn checked_tun(&mut self, inactive: bool) -> bool {
+        self.tun_failures = if inactive {
+            self.tun_failures.saturating_add(1)
+        } else {
+            0
+        };
+        self.tun_failures >= 2
     }
 }
 
@@ -133,5 +146,20 @@ mod tests {
         assert!(!policy.checked(false));
         policy.reset(at(80));
         assert!(!policy.needs_check(), "断开清除恢复意图");
+    }
+
+    #[test]
+    fn inactive_tun_is_counted_independently_of_https() {
+        let mut policy = ResumeRecovery::new(at(0));
+        policy.observe(at(15), path("a"));
+        assert!(policy.observe(at(30), path("a")));
+        assert!(!policy.checked(true));
+        assert!(!policy.needs_check());
+        assert!(!policy.checked_tun(true));
+        assert!(!policy.checked_tun(false));
+        assert!(!policy.checked_tun(true));
+        assert!(policy.checked_tun(true));
+        assert!(!policy.observe(at(45), path("b")));
+        assert!(!policy.checked_tun(true));
     }
 }

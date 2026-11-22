@@ -397,7 +397,7 @@ pub async fn on_campus_changed(app: &AppHandle) {
     }
 }
 
-/// 每 15 秒检查核心；网络变化或长时间暂停后额外复核真实 HTTPS 通路。
+/// 每 15 秒检查核心和 TUN；网络变化或长时间暂停后额外复核 HTTPS 通路。
 /// 等待物理地址稳定，避免唤醒期间抢跑；沿用十分钟最多三次的恢复预算。
 pub fn spawn_engine_watchdog(app: AppHandle) {
     const WINDOW: Duration = Duration::from_secs(10 * 60);
@@ -427,13 +427,16 @@ pub fn spawn_engine_watchdog(app: AppHandle) {
                 continue;
             }
             let alive = state.engine.core_alive().await;
-            let data_failed = if alive && resume.needs_check() {
-                let port = state.engine.status().await.mixed_port;
-                resume.checked(super::environment::recovery_data_alive(port).await)
+            let engine = state.engine.status().await;
+            let tun_inactive =
+                alive && engine.tun_enabled && state.engine.tun_active().await == Some(false);
+            let tun_failed = resume.checked_tun(tun_inactive);
+            let data_failed = if alive && !tun_inactive && resume.needs_check() {
+                resume.checked(super::environment::recovery_data_alive(engine.mixed_port).await)
             } else {
                 false
             };
-            if alive && !data_failed {
+            if alive && !tun_failed && !data_failed {
                 history.retain(|when| when.elapsed() < WINDOW);
                 continue;
             }
@@ -452,7 +455,9 @@ pub fn spawn_engine_watchdog(app: AppHandle) {
             history.push(now);
             state.logs.warn(
                 "engine",
-                if data_failed {
+                if tun_failed {
+                    "[网络恢复] 控制 API 在线，但 TUN 连续两轮未生效，重建核心 / TUN inactive on two checks; rebuilding core"
+                } else if data_failed {
                     "[网络恢复] 网络变化或长时间暂停后，控制 API 存活但两条 HTTPS 通路连续两轮失败，重建核心 / Data paths failed after network change or pause"
                 } else {
                     "[核心自动恢复] 核心无响应，物理网络已稳定，自动恢复连接 / Core unresponsive; physical network is stable"

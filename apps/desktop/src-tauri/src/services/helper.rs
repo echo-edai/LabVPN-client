@@ -347,10 +347,18 @@ mod tests {
             .unwrap();
         let port = listener.local_addr().unwrap().port();
         let task = tokio::spawn(async move {
-            let (mut stream, _) = listener.accept().await.unwrap();
-            let mut reader = BufReader::new(&mut stream);
-            let mut line = String::new();
-            reader.read_line(&mut line).await.unwrap();
+            let (mut stream, line) = tokio::time::timeout(Duration::from_secs(3), async {
+                loop {
+                    let (mut stream, _) = listener.accept().await.unwrap();
+                    let mut reader = BufReader::new(&mut stream);
+                    let mut line = String::new();
+                    if reader.read_line(&mut line).await.unwrap() != 0 {
+                        break (stream, line);
+                    }
+                }
+            })
+            .await
+            .unwrap();
             let request: Request = serde_json::from_str(&line).unwrap();
             assert_eq!(request.command, Command::StopCore);
             assert_eq!(request.token, "test-token");

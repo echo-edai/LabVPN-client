@@ -39,6 +39,18 @@ pub struct MihomoApi {
     client: reqwest::Client,
 }
 
+#[derive(serde::Deserialize)]
+struct RunningConfig {
+    tun: RunningTun,
+}
+
+#[derive(serde::Deserialize)]
+struct RunningTun {
+    enable: bool,
+    #[serde(rename = "auto-route")]
+    auto_route: bool,
+}
+
 impl MihomoApi {
     /// 创建客户端（自动绕过系统代理，避免自环）。
     pub fn new(port: u16, secret: String) -> Self {
@@ -155,6 +167,32 @@ impl MihomoApi {
             .and_then(serde_json::Value::as_str)
             .unwrap_or("unknown")
             .to_string())
+    }
+
+    /// `/configs` 返回实际监听状态；TUN 初始化失败时，控制 API 仍可能可用。
+    pub async fn tun_active(&self) -> CmdResult<bool> {
+        let config: RunningConfig = self
+            .request(reqwest::Method::GET, "/configs")
+            .send()
+            .await?
+            .error_for_status()?
+            .json()
+            .await?;
+        Ok(config.tun.enable && config.tun.auto_route)
+    }
+
+    /// 控制服务比监听器先启动，短时间内允许 TUN 仍在安装路由。
+    pub async fn wait_tun_ready(&self, timeout: Duration) -> bool {
+        tokio::time::timeout(timeout, async {
+            loop {
+                if matches!(self.tun_active().await, Ok(true)) {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(250)).await;
+            }
+        })
+        .await
+        .is_ok()
     }
 
     /// 热更新配置（PUT /configs?force=true）。
@@ -350,6 +388,80 @@ pub fn traffic_point(up: u64, down: u64, up_total: u64, down_total: u64) -> Traf
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+
+    async fn controller(
+        replies: &[(&'static str, &'static str)],
+    ) -> (MihomoApi, tokio::task::JoinHandle<()>) {
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+            .await
+            .unwrap();
+        let api = MihomoApi::new(listener.local_addr().unwrap().port(), "test-secret".into());
+        let replies = replies.to_vec();
+        let task = tokio::spawn(async move {
+            for (path, body) in replies {
+                let mut stream = tokio::time::timeout(Duration::from_secs(3), async {
+                    loop {
+                        let (mut stream, _) = listener.accept().await.unwrap();
+                        let mut lines = BufReader::new(&mut stream).lines();
+                        // 其他测试可能只连接端口探测，不发送 HTTP 请求。
+                        let Some(request) = lines.next_line().await.unwrap() else {
+                            continue;
+                        };
+                        assert_eq!(request, format!("GET {path} HTTP/1.1"));
+                        let mut authorized = false;
+                        while let Some(line) = lines.next_line().await.unwrap() {
+                            if line.is_empty() {
+                                break;
+                            }
+                            authorized |=
+                                line.eq_ignore_ascii_case("authorization: Bearer test-secret");
+                        }
+                        assert!(authorized);
+                        break stream;
+                    }
+                })
+                .await
+                .unwrap();
+                let reply = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+                stream.write_all(reply.as_bytes()).await.unwrap();
+            }
+        });
+        (api, task)
+    }
+
+    #[tokio::test]
+    async fn responding_controller_without_tun_is_not_ready() {
+        let (api, server) = controller(&[
+            ("/version", r#"{"version":"v1.19.32"}"#),
+            ("/configs", r#"{"tun":{"enable":false,"auto-route":false}}"#),
+        ])
+        .await;
+        assert_eq!(api.version().await.unwrap(), "v1.19.32");
+        assert!(!api.wait_tun_ready(Duration::from_millis(500)).await);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn waits_for_tun_to_finish_loading() {
+        let (api, server) = controller(&[
+            ("/configs", r#"{"tun":{"enable":true,"auto-route":false}}"#),
+            ("/configs", r#"{"tun":{"enable":true,"auto-route":true}}"#),
+        ])
+        .await;
+        assert!(api.wait_tun_ready(Duration::from_secs(3)).await);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn missing_tun_status_is_not_an_explicit_failure() {
+        let (api, server) = controller(&[("/configs", r#"{"mode":"rule"}"#)]).await;
+        assert!(api.tun_active().await.is_err());
+        server.await.unwrap();
+    }
 
     #[test]
     fn encodes_uri_segment() {

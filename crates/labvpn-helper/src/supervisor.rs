@@ -2,10 +2,13 @@
 
 use std::collections::BTreeMap;
 use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
+#[cfg(unix)]
+use std::time::Duration;
 use std::time::Instant;
 
 use labvpn_core::ipc::{CoreStatus, MAX_REQUEST_BYTES};
@@ -26,6 +29,8 @@ struct Inner {
     started_at: Option<Instant>,
     last_error: Option<String>,
     config_generation: Option<u64>,
+    #[cfg(target_os = "macos")]
+    route_guard_ready: bool,
     sensitive_files: Vec<PathBuf>,
     /// 本次核心会话应有的 TUN 自动路由（供路由自愈线程使用）
     #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
@@ -46,6 +51,8 @@ impl Supervisor {
                 started_at: None,
                 last_error: None,
                 config_generation: None,
+                #[cfg(target_os = "macos")]
+                route_guard_ready: false,
                 sensitive_files: Vec::new(),
                 tun_plan: None,
             }),
@@ -155,11 +162,11 @@ impl Supervisor {
             inner.started_at = Some(Instant::now());
             inner.last_error = None;
             inner.config_generation = Some(generation);
-            // 从生成配置解析本会话应有的 TUN 自动路由，交给自愈线程巡检
-            inner.tun_plan = tun_guard::plan_from_config(config_yaml);
-            if inner.tun_plan.is_some() {
-                logging::info("TUN 自动路由守护已启用（缺失时自动补回）");
+            #[cfg(target_os = "macos")]
+            {
+                inner.route_guard_ready = false;
             }
+            inner.tun_plan = tun_guard::plan_from_config(config_yaml);
             logging::info(format!(
                 "核心已启动 pid={pid} config={}",
                 config_path.display()
@@ -173,21 +180,25 @@ impl Supervisor {
     }
 
     /// 停止核心。
-    pub fn stop(&self) -> CoreStatus {
-        let Ok(mut inner) = self.inner.lock() else {
-            return CoreStatus::default();
-        };
-        if let Some(mut child) = inner.child.take() {
+    pub fn stop(&self) -> Result<CoreStatus, String> {
+        let mut inner = self.inner.lock().map_err(|_| "内部锁损坏".to_string())?;
+        #[cfg(target_os = "macos")]
+        {
+            inner.route_guard_ready = false;
+        }
+        if let Some(child) = inner.child.as_mut() {
             let pid = child.id();
-            let _ = child.kill();
-            let _ = child.wait();
+            terminate(child)
+                .map_err(|err| format!("核心停止未确认 / Core stop unconfirmed: {err}"))?;
+            inner.child = None;
             logging::info(format!("核心已停止 pid={pid}"));
         }
         remove_pid_file(&self.workdir);
         cleanup_sensitive(&mut inner);
         inner.started_at = None;
+        inner.config_generation = None;
         inner.tun_plan = None;
-        status_locked(&self.log_path, &mut inner)
+        Ok(status_locked(&self.log_path, &mut inner))
     }
 
     /// 仅清理已确认就绪的当前会话，拒绝延迟到达的旧确认。
@@ -201,17 +212,31 @@ impl Supervisor {
             return Err("核心会话已变化，拒绝清理敏感配置".to_string());
         }
         cleanup_sensitive(&mut inner);
+        #[cfg(target_os = "macos")]
+        {
+            inner.route_guard_ready = true;
+        }
         logging::info("核心就绪已确认，本会话敏感配置已清理");
         Ok(status)
     }
 
-    /// 当前会话的 TUN 自动路由计划（自愈线程使用）。
+    /// 只在已确认就绪的会话中巡检；单次写路由与启停互斥。
     #[cfg(target_os = "macos")]
-    pub fn tun_plan(&self) -> Option<TunRoutePlan> {
-        self.inner
-            .lock()
-            .ok()
-            .and_then(|inner| inner.tun_plan.clone())
+    pub fn with_ready_tun<R>(
+        &self,
+        expected_generation: Option<u64>,
+        f: impl FnOnce(u64, &TunRoutePlan) -> R,
+    ) -> Option<R> {
+        let mut inner = self.inner.lock().ok()?;
+        let generation = inner.config_generation?;
+        if !inner.route_guard_ready
+            || expected_generation.is_some_and(|expected| expected != generation)
+            || inner.started_at?.elapsed() < Duration::from_secs(5)
+            || inner.child.as_mut()?.try_wait().ok()?.is_some()
+        {
+            return None;
+        }
+        Some(f(generation, inner.tun_plan.as_ref()?))
     }
 
     /// 查询状态（会顺带回收已退出的子进程）。
@@ -224,6 +249,32 @@ impl Supervisor {
             },
         }
     }
+}
+
+fn terminate(child: &mut Child) -> io::Result<()> {
+    if child.try_wait()?.is_some() {
+        return Ok(());
+    }
+    #[cfg(unix)]
+    {
+        // 安全：只向仍由本 helper 持有、尚未回收的子进程发信号。
+        if unsafe { libc::kill(child.id() as libc::pid_t, libc::SIGTERM) } == 0 {
+            // 先让 mihomo 释放 TUN 路由；卡住时仍有退出时限。
+            let deadline = Instant::now() + Duration::from_secs(3);
+            while Instant::now() < deadline {
+                if child.try_wait()?.is_some() {
+                    return Ok(());
+                }
+                std::thread::sleep(Duration::from_millis(25));
+            }
+        }
+    }
+    if let Err(err) = child.kill() {
+        if child.try_wait()?.is_none() {
+            return Err(err);
+        }
+    }
+    child.wait().map(|_| ())
 }
 
 fn status_locked(log_path: &Path, inner: &mut Inner) -> CoreStatus {
@@ -484,7 +535,7 @@ mod tests {
         let confirmed = supervisor.confirm_ready(pid, 2);
         let removed = !new_file.exists();
         let old_retained = old_file.exists();
-        supervisor.stop();
+        supervisor.stop().unwrap();
         fs::remove_dir_all(dir).unwrap();
         assert!(stale.is_err());
         assert!(retained, "旧确认不得删除新配置");
@@ -498,6 +549,65 @@ mod tests {
         let first = next_generation();
         let second = next_generation();
         assert!(second > first);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn terminate_lets_child_handle_sigterm() {
+        use std::io::{BufRead, BufReader};
+
+        let mut child = Command::new("/bin/sh")
+            .args([
+                "-c",
+                "trap 'exit 42' TERM; printf 'ready\\n'; while :; do /bin/sleep 0.05; done",
+            ])
+            .stdout(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let mut ready = String::new();
+        BufReader::new(child.stdout.take().unwrap())
+            .read_line(&mut ready)
+            .unwrap();
+        assert_eq!(ready.trim(), "ready");
+        terminate(&mut child).unwrap();
+        assert_eq!(child.wait().unwrap().code(), Some(42));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn tun_repair_requires_ready_current_generation() {
+        let dir = std::env::temp_dir().join(format!(
+            "labvpn-tun-{}-{}",
+            std::process::id(),
+            next_generation()
+        ));
+        let supervisor = Supervisor::new(PathBuf::from("/bin/sleep"), dir);
+        let start = |generation| {
+            let mut inner = supervisor.inner.lock().unwrap();
+            let child = Command::new("/bin/sleep").arg("30").spawn().unwrap();
+            let pid = child.id();
+            inner.child = Some(child);
+            inner.started_at = Some(Instant::now() - Duration::from_secs(6));
+            inner.config_generation = Some(generation);
+            inner.tun_plan =
+                tun_guard::plan_from_config("tun:\n  enable: true\n  auto-route: true\n");
+            pid
+        };
+        let previous_pid = start(1);
+        let before_ready = supervisor.with_ready_tun(None, |_, _| ());
+        supervisor.confirm_ready(previous_pid, 1).unwrap();
+        let after_ready = supervisor.with_ready_tun(None, |generation, _| generation);
+        supervisor.stop().unwrap();
+        let current_pid = start(2);
+        supervisor.confirm_ready(current_pid, 2).unwrap();
+        let stale_write = supervisor.with_ready_tun(Some(1), |_, _| ());
+        let current_write = supervisor.with_ready_tun(Some(2), |_, _| ());
+        supervisor.stop().unwrap();
+
+        assert_eq!(before_ready, None);
+        assert_eq!(after_ready, Some(1));
+        assert_eq!(stale_write, None);
+        assert_eq!(current_write, Some(()));
     }
 
     #[test]

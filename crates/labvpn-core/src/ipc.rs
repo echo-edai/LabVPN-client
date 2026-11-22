@@ -30,7 +30,7 @@ pub enum Command {
     },
     /// 停止代理核心
     StopCore,
-    /// 应用确认控制 API 和代理端口就绪后，清理本会话敏感文件。
+    /// 应用确认控制 API、代理端口和 TUN 就绪后，清理本会话敏感文件。
     ConfirmCoreReady {
         /// 启动响应中的核心 PID
         pid: u32,
