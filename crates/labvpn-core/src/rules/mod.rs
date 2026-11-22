@@ -4,6 +4,7 @@
 //! 详细设计见 `docs/RULES.md`。
 
 pub mod custom;
+pub mod import;
 pub mod matcher;
 pub mod presets;
 pub mod providers;
@@ -13,7 +14,9 @@ use serde::{Deserialize, Serialize};
 use crate::config::{defaults, AppConfig, NodeSelectionMode, RoutingPreset};
 use crate::util;
 use providers::enhanced_providers;
-use providers::{ProviderSpec, AD_BLOCK, CHINA_DOMAIN_FALLBACK, FDU_DOMAIN, FDU_IP, LAN};
+use providers::{
+    ProviderSource, ProviderSpec, AD_BLOCK, CHINA_DOMAIN_FALLBACK, FDU_DOMAIN, FDU_IP, LAN,
+};
 
 /// 固定名称常量（mihomo 配置与前端同源）。
 pub mod names {
@@ -227,7 +230,7 @@ impl RulePlan {
 
 /// 构建规则计划（纯函数）。
 pub fn build(config: &AppConfig, ctx: &RuleContext) -> RulePlan {
-    let providers = build_providers(config);
+    let mut providers = build_providers(config);
     let groups = build_groups(config, ctx);
     let known_targets: Vec<String> = groups
         .iter()
@@ -250,6 +253,13 @@ pub fn build(config: &AppConfig, ctx: &RuleContext) -> RulePlan {
     push_campus(&mut rules, config, ctx);
     push_ssh(&mut rules, config, ctx);
     push_custom(&mut rules, &mut warnings, config, &known_targets, false);
+    let imported_fallback = push_imported(
+        &mut rules,
+        &mut providers,
+        &mut warnings,
+        config,
+        &known_targets,
+    );
 
     let preset = config.routing.preset;
     let minimal = preset == RoutingPreset::Minimal;
@@ -264,7 +274,9 @@ pub fn build(config: &AppConfig, ctx: &RuleContext) -> RulePlan {
         push_china(&mut rules, config, &mut warnings);
     }
 
-    let final_group = if minimal && !ctx.subscription_available {
+    let final_group = if let Some(target) = imported_fallback {
+        target
+    } else if minimal && !ctx.subscription_available {
         names::DIRECT
     } else {
         names::GROUP_FINAL
@@ -281,6 +293,61 @@ pub fn build(config: &AppConfig, ctx: &RuleContext) -> RulePlan {
     plan.warnings.sort();
     plan.warnings.dedup();
     plan
+}
+
+fn push_imported(
+    rules: &mut Vec<String>,
+    providers: &mut Vec<ProviderSpec>,
+    warnings: &mut Vec<String>,
+    config: &AppConfig,
+    targets: &[String],
+) -> Option<&'static str> {
+    let profile = config.routing.imported_rules.as_ref()?;
+    if !profile.valid() {
+        warnings.push("分流档案已损坏，未加载 / Invalid routing profile skipped".into());
+        return None;
+    }
+    let mut seen = std::collections::HashSet::new();
+    let mut unavailable = |target: &str| {
+        warnings.push(format!(
+            "导入规则未启用：出口 {target} 不可用 / Imported outlet unavailable: {target}"
+        ));
+    };
+    for (index, entry) in profile.entries.iter().enumerate() {
+        let target = entry.outlet.target();
+        if !targets.iter().any(|known| known == target) {
+            unavailable(target);
+            continue;
+        }
+        if let [condition] = entry.matchers.as_slice() {
+            let rule = import::core_rule(condition, target);
+            if seen.insert(rule.clone()) {
+                rules.push(rule);
+            }
+        } else {
+            let name = format!("LabVPNImport{index}");
+            rules.push(format!("RULE-SET,{name},{target}"));
+            providers.push(ProviderSpec {
+                name,
+                source: ProviderSource::Inline {
+                    payload: entry.matchers.clone(),
+                },
+                behavior: "classical".into(),
+                format: "yaml".into(),
+                interval: 0,
+            });
+        }
+    }
+    profile
+        .fallback
+        .map(import::Outlet::target)
+        .filter(|target| {
+            let enabled = targets.iter().any(|known| known == target);
+            if !enabled {
+                unavailable(target);
+            }
+            enabled
+        })
 }
 
 /// 是否启用广告拦截（严格预设强制开启）。

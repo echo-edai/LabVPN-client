@@ -500,6 +500,9 @@ pub struct RoutingConfig {
     pub custom_rules: Vec<String>,
     /// 自定义规则是否插到最高优先级（10/8 规则之前）
     pub custom_rules_high_priority: bool,
+    /// 导入的分流档案，未导入时保留原有行为。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub imported_rules: Option<std::sync::Arc<crate::rules::import::Profile>>,
     /// 是否拦截广告域名
     pub adblock: bool,
     /// 是否使用 GEOSITE/GEOIP（需要 geo 数据文件）
@@ -518,6 +521,7 @@ impl Default for RoutingConfig {
             preset: RoutingPreset::Smart,
             custom_rules: Vec::new(),
             custom_rules_high_priority: false,
+            imported_rules: None,
             adblock: false,
             geo_rules: true,
             enhanced_rules: false,
@@ -1164,6 +1168,17 @@ impl AppConfig {
     }
 
     fn validate_routing(&self, issues: &mut Vec<ValidationIssue>) {
+        if self
+            .routing
+            .imported_rules
+            .as_ref()
+            .is_some_and(|profile| !profile.valid())
+        {
+            issues.push(ValidationIssue::error(
+                "routing.importedRules",
+                "导入的规则档案无效 / Invalid imported routing profile",
+            ));
+        }
         for (index, rule) in self.routing.custom_rules.iter().enumerate() {
             if rule.trim().is_empty() {
                 continue;

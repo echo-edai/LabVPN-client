@@ -4,6 +4,7 @@ use tauri::State;
 
 use labvpn_core::config::{AppConfig, ValidationIssue};
 use labvpn_core::rules::custom::{self, parse_rule};
+use labvpn_core::rules::import::{Outlet, Preview};
 use labvpn_core::rules::matcher;
 use labvpn_core::rules::names;
 use labvpn_core::rules::presets::PresetInfo;
@@ -76,6 +77,27 @@ pub fn get_presets() -> Vec<PresetInfo> {
     labvpn_core::rules::presets::all()
 }
 
+/// 预览选中的文件或公开 lazy_group，无落盘操作。
+#[tauri::command]
+pub async fn preview_rule_import(
+    file_name: Option<String>,
+    text: Option<String>,
+    default_outlet: Outlet,
+    fetch_public: bool,
+) -> CmdResult<Preview> {
+    let local = match (file_name, text) {
+        (Some(name), Some(text)) => Some((name, text)),
+        (None, None) => None,
+        _ => {
+            return Err(CommandError::new(
+                "rule_import_format",
+                "缺少文件内容 / Missing rule file contents",
+            ))
+        }
+    };
+    crate::services::rule_import::preview_file(local, default_outlet, fetch_public).await
+}
+
 /// 校验一组自定义规则。
 #[tauri::command]
 pub fn validate_rules(rules: Vec<String>) -> RuleValidation {
@@ -137,7 +159,12 @@ pub async fn diagnose_target(
         return Err(CommandError::new("diagnose", "请输入域名或 IP"));
     }
     let plan = orchestrator::rule_plan(state.inner()).await?;
-    let payloads = labvpn_core::rules::providers::builtin_payloads()?;
+    let mut payloads = labvpn_core::rules::providers::builtin_payloads()?;
+    payloads.extend(
+        plan.providers
+            .iter()
+            .filter_map(|provider| provider.inline_payload()),
+    );
     let outcome = matcher::match_target(target, &plan, &payloads);
     Ok(DiagnosticsResult {
         input: outcome.input,

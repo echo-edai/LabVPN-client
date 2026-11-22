@@ -19,6 +19,7 @@ import { Link, useNavigate } from "react-router-dom";
 
 import { ConfigTabs } from "@/components/features/ConfigTabs";
 import { DiagnosticsPanel } from "@/components/features/DiagnosticsPanel";
+import { RuleImportPanel } from "@/components/features/RuleImportPanel";
 import { PageHeader } from "@/components/layout/PageHeader";
 import {
   Badge,
@@ -35,7 +36,7 @@ import {
 } from "@/components/ui";
 import { ROUTES } from "@/lib/constants";
 import { cn } from "@/lib/cn";
-import type { RoutingPreset } from "@/lib/types";
+import type { ImportedRuleProfile, RoutingPreset } from "@/lib/types";
 import { useAppStore } from "@/stores/app";
 
 export function Merge() {
@@ -61,6 +62,7 @@ export function Merge() {
   const [enhancedRules, setEnhancedRules] = useState(false);
   const [highPriority, setHighPriority] = useState(false);
   const [customRules, setCustomRules] = useState("");
+  const [importedRules, setImportedRules] = useState<ImportedRuleProfile | null>(null);
   const [extraDomains, setExtraDomains] = useState("");
   const [previewTab, setPreviewTab] = useState<"rules" | "yaml">("rules");
   const [showPreview, setShowPreview] = useState(false);
@@ -78,6 +80,7 @@ export function Merge() {
     setEnhancedRules(config.routing.enhancedRules);
     setHighPriority(config.routing.customRulesHighPriority);
     setCustomRules(config.routing.customRules.join("\n"));
+    setImportedRules(config.routing.importedRules ?? null);
     setExtraDomains(config.routing.extraCampusDomains.join("\n"));
     setNodeMode(config.nodeSelection.mode);
     setNodeSelected(config.nodeSelection.selected ?? "");
@@ -108,6 +111,7 @@ export function Merge() {
         adblock,
         geoRules,
         enhancedRules,
+        importedRules,
         customRulesHighPriority: highPriority,
         customRules: customRules
           .split("\n")
@@ -370,6 +374,7 @@ export function Merge() {
               </Field>
             </div>
           </Card>
+          <RuleImportPanel profile={importedRules} onChange={setImportedRules} disabled={Boolean(busy)} />
 
           <Card>
             <CardHeader

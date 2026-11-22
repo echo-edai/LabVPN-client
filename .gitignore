@@ -18,6 +18,8 @@ apps/desktop/dist/
 # ---- 运行时产物 ----
 work/
 tmp/
+/ref/*
+!/ref/.gitkeep
 *.log
 *.pid
 .DS_Store

@@ -23,6 +23,8 @@ import type {
   PreviewResult,
   ProxyGroupInfo,
   RuleValidation,
+  RuleImportPreview,
+  RuleOutlet,
   SecretUpdates,
   SshTestResult,
   SubscriptionInfo,
@@ -85,6 +87,13 @@ export const api = {
   validateConfig: (config: AppConfig) => call<ValidationIssue[]>("validate_config", { config }),
   previewConfig: () => call<PreviewResult>("preview_config"),
   getPresets: () => call<PresetInfo[]>("get_presets"),
+  previewRuleImport: (file: { name: string; text: string } | null, defaultOutlet: RuleOutlet, fetchPublic: boolean) =>
+    call<RuleImportPreview>("preview_rule_import", {
+      fileName: file?.name ?? null,
+      text: file?.text ?? null,
+      defaultOutlet,
+      fetchPublic,
+    }),
   validateRules: (rules: string[]) => call<RuleValidation>("validate_rules", { rules }),
   diagnoseTarget: (input: string) => call<DiagnosticsResult>("diagnose_target", { input }),
 

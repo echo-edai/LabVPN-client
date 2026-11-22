@@ -117,6 +117,11 @@ pub enum ProviderSource {
         /// 相对工作目录的缓存路径
         path: String,
     },
+    /// 导入时冻结的离线规则集。
+    Inline {
+        /// 不含出口策略的匹配条件。
+        payload: Vec<String>,
+    },
 }
 
 /// 生成到 mihomo 配置中的 rule-provider 规格。
@@ -171,11 +176,15 @@ impl ProviderSpec {
         }
     }
 
-    /// 规则集在 mihomo 工作目录内的相对路径。
-    pub fn rel_path(&self) -> &str {
-        match &self.source {
-            ProviderSource::File { path } | ProviderSource::Http { path, .. } => path,
+    /// 取出可用于离线诊断的内联规则集。
+    pub fn inline_payload(&self) -> Option<ProviderPayload> {
+        if let ProviderSource::Inline { payload } = &self.source {
+            return Some(ProviderPayload {
+                name: self.name.clone(),
+                rules: payload.clone(),
+            });
         }
+        None
     }
 }
 

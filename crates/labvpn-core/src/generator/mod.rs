@@ -427,6 +427,7 @@ fn provider_to_section(provider: &rules::providers::ProviderSpec) -> RuleProvide
             format: provider.format.clone(),
             url: None,
             path: path.clone(),
+            payload: None,
             interval: 0,
         },
         rules::providers::ProviderSource::Http { url, path } => RuleProvider {
@@ -435,7 +436,17 @@ fn provider_to_section(provider: &rules::providers::ProviderSpec) -> RuleProvide
             format: provider.format.clone(),
             url: Some(url.clone()),
             path: path.clone(),
+            payload: None,
             interval: provider.interval,
+        },
+        rules::providers::ProviderSource::Inline { payload } => RuleProvider {
+            kind: "inline".to_string(),
+            behavior: provider.behavior.clone(),
+            format: provider.format.clone(),
+            url: None,
+            path: String::new(),
+            payload: Some(payload.clone()),
+            interval: 0,
         },
     }
 }

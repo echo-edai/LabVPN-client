@@ -1,5 +1,5 @@
 import { Loader2 } from "lucide-react";
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import type { ButtonHTMLAttributes, ReactNode, Ref } from "react";
 
 import { cn } from "@/lib/cn";
 
@@ -7,6 +7,7 @@ type Variant = "primary" | "secondary" | "ghost" | "danger" | "success";
 type Size = "sm" | "md" | "lg";
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  ref?: Ref<HTMLButtonElement>;
   variant?: Variant;
   size?: Size;
   loading?: boolean;

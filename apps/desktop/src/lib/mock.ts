@@ -25,6 +25,7 @@ import type {
   PreviewResult,
   ProxyGroupInfo,
   RuleValidation,
+  RuleImportPreview,
   SshTestResult,
   SubscriptionInfo,
   SystemInfo,
@@ -662,6 +663,19 @@ export async function mockInvoke(cmd: string, args?: Record<string, unknown>): P
       return preview();
     case "get_presets":
       return presets;
+    case "preview_rule_import":
+      return {
+        profile: {
+          name: String(args?.fileName ?? "lazy_group (Johnshall)"),
+          entries: [{ outlet: "proxy", matchers: ["DOMAIN-SUFFIX,example.com"] }],
+          fallback: "proxy",
+        },
+        ruleCount: 1,
+        setCount: 0,
+        mappings: [{ source: "PROXY", outlet: "proxy" }],
+        skipped: [{ reason: "unsupportedRule", count: 1, lines: [4] }],
+        samples: ["DOMAIN-SUFFIX,example.com,🚀 代理"],
+      } satisfies RuleImportPreview;
     case "validate_rules": {
       const rules = (args?.rules ?? []) as string[];
       const valid = rules.filter((rule) => rule.split(",").length >= 3);

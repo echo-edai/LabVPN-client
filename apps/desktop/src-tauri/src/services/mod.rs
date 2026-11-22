@@ -13,6 +13,7 @@ mod ports;
 pub mod proxy_guard;
 pub mod proxy_lease;
 mod resume;
+pub mod rule_import;
 pub mod secrets;
 pub mod ssh_probe;
 pub mod startup;

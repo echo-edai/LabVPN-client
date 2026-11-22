@@ -157,23 +157,10 @@ jobs:
           tagName: ${{ inputs.tag || github.ref_name }}
           releaseName: "LabVPN ${{ inputs.tag || github.ref_name }}"
           releaseBody: |
-            ## LabVPN v0.1.20
+            ## LabVPN ${{ inputs.tag || github.ref_name }}
 
-            - 登录启动只打开应用，等待手动连接；启动时恢复上次代理租约并清理残留核心。
-            - 断开、退出停止自己的核心和校园隧道，逐项恢复原系统代理，保留外部修改。
-            - 总览新增代理环境检查：API、PID、VPN、系统代理、PAC/WPAD、代理进程、启动项。
-            - 一键检查 HTTPS 与校园 DNS 数据面，支持输入服务器测试 SSH 欢迎行，展示时间和失败原因。
-            - 一键安全断开并恢复、打开系统启动设置；macOS 可停用已识别的其他代理自启动服务。
-            - 连接不再强制退出其他软件；连接事务串行，无关设置保留校园隧道。
-            - 公共 DNS 探测失败后以校园 DNS 复核，减少误重连，恢复次数按滚动窗口限制。
-            - helper 协议 v2，按会话确认就绪后删除敏感配置，修复延迟启动竞态。
-            - 启用生产界面 CSP，敏感文件以私有权限创建。
-
-            升级后请在设置中更新特权 helper。关闭窗口可能保留菜单栏运行，彻底退出请用菜单栏退出。
-            macOS 未配置 Developer ID 时使用 ad-hoc 签名，不代表 Apple 公证。
-            Windows / Linux 启动管理请使用系统设置。探测成功不代表长时间 SSH 会话已验证。
-            强制结束进程后，代理恢复记录在下次打开时处理。
-            详见 docs/RELEASE-v0.1.20.md；随附 fdu-connect（AGPL-3.0）与 mihomo（GPL-3.0）许可及源码说明。
+            详见该标签下的 `docs/RELEASE-${{ inputs.tag || github.ref_name }}.md`。
+            使用 TUN 的用户请在断开后更新特权服务。macOS 的 ad-hoc 签名不代表 Apple 公证。
           releaseDraft: true
           prerelease: true
           args: ${{ matrix.args }}

@@ -83,6 +83,16 @@
 4. 自定义规则默认插入到「SSH 规则之后、CN 直连之前」；用户可勾选"最高优先级"插到 `10/8` 之前（谨慎）。
 5. 单行 ≤ 512 字符，总条数 ≤ 500。
 
+### 5.1 导入分流文件
+
+打开「融合与规则 → 分流规则档案」，选 UTF-8 的 Shadowrocket `.conf`、`.list`、`.txt`、`.rules`，或带 `rules:` / `payload:` 的 Clash YAML。只处理规则，Shadowrocket 的 `select` 策略组只用来解析默认策略。未映射的自定义出口会列出并跳过；无策略的列表可指定 LabVPN 出口。`FINAL` / `MATCH` 采用第一条源兜底，替换最后的兜底目标；其后的源规则不导入。
+
+「预览公开 lazy_group」从 [Johnshall](https://github.com/Johnshall/Shadowrocket-ADBlock-Rules-Forever) 取回公开配置（CC BY-SA 4.0）；引用的公开文本来自 [blackmatrix7](https://github.com/blackmatrix7/ios_rule_script) 和 [iab0x00](https://github.com/iab0x00/ProxyRules)。本仓库不打包或重新分发原规则数据；导入时转换为用户本机的离线快照。导入本地文件默认不联网，可勾选加载这些受支持的公开来源；其他地址、重定向、凭据和私有文件引用不会读取。更新时重新预览并替换档案。
+
+策略组映射到 LabVPN 的订阅、直连、拦截、校内、SSH 出口，不保留 Shadowrocket 的单独节点选择、地区测速组、DNS、脚本、URL 重写和 MITM。`USER-AGENT`、`URL-REGEX`、逻辑表达式、`IP-ASN`（需要另一个数据文件）等会显示为跳过。规则上限 100,000 条，单次内容和转换结果分别限制为 3 MiB。
+
+顺序为：防环、已有高优先级手写规则、LAN/校内/SSH、已有普通手写规则、导入档案、内置广告与国内规则、兜底。`global` 和 `direct` 模式不执行规则分流。导入档案只在加入草稿并保存后持久化；运行中需要应用或重连后才使用新配置。
+
 ## 6. 规则数据源（`resources/rules/`）
 
 | 文件 | 内容 | 来源 | 更新 |

@@ -229,7 +229,7 @@ fn is_zero_u32(value: &u32) -> bool {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct RuleProvider {
-    /// 类型：http / file
+    /// 类型：http / file / inline
     #[serde(rename = "type")]
     pub kind: String,
     /// behavior
@@ -240,7 +240,11 @@ pub struct RuleProvider {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
     /// 本地路径
+    #[serde(skip_serializing_if = "String::is_empty")]
     pub path: String,
+    /// 内联规则集内容
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub payload: Option<Vec<String>>,
     /// 更新间隔（秒）
     #[serde(skip_serializing_if = "is_zero_u32")]
     pub interval: u32,

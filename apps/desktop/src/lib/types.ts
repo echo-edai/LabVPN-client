@@ -100,11 +100,37 @@ export interface RoutingConfig {
   preset: RoutingPreset;
   customRules: string[];
   customRulesHighPriority: boolean;
+  importedRules?: ImportedRuleProfile | null;
   adblock: boolean;
   geoRules: boolean;
   enhancedRules: boolean;
   dns: DnsConfig;
   extraCampusDomains: string[];
+}
+
+export type RuleOutlet = "proxy" | "direct" | "reject" | "campus" | "ssh";
+
+export interface ImportedRuleProfile {
+  name: string;
+  entries: { outlet: RuleOutlet; matchers: string[] }[];
+  fallback: RuleOutlet | null;
+}
+
+export type RuleImportIssue =
+  | "unsupportedRule"
+  | "invalidRule"
+  | "unknownOutlet"
+  | "remoteSkipped"
+  | "emptyRuleSet"
+  | "afterFallback";
+
+export interface RuleImportPreview {
+  profile: ImportedRuleProfile | null;
+  ruleCount: number;
+  setCount: number;
+  mappings: { source: string; outlet: RuleOutlet | null }[];
+  skipped: { reason: RuleImportIssue; count: number; lines: number[] }[];
+  samples: string[];
 }
 
 export interface AnalyticsConfig {

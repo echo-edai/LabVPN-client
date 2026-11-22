@@ -70,6 +70,7 @@ pub fn run() {
             commands::config::validate_config,
             commands::config::preview_config,
             commands::config::get_presets,
+            commands::config::preview_rule_import,
             commands::config::validate_rules,
             commands::config::diagnose_target,
             commands::connect::start_engine,
