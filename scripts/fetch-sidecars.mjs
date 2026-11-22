@@ -71,6 +71,16 @@ function commandExists(command) {
   }
 }
 
+function expandZip(archive, directory) {
+  if (isWindows) {
+    // 使用 Windows 自带的 bsdtar，避开旧 PowerShell Archive 的 .NET 重载问题。
+    const tar = join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe");
+    exec(tar, ["-xf", archive, "-C", directory]);
+  } else {
+    exec("unzip", ["-o", archive, "-d", directory]);
+  }
+}
+
 function sha256(buffer) {
   return createHash("sha256").update(buffer).digest("hex");
 }
@@ -177,15 +187,7 @@ async function fetchMihomo() {
   } else {
     const outDir = join(tmpdir(), `mihomo-${Date.now()}`);
     mkdirSync(outDir, { recursive: true });
-    if (isWindows) {
-      exec("powershell", [
-        "-NoProfile",
-        "-Command",
-        `Expand-Archive -Force -Path '${archive}' -DestinationPath '${outDir}'`,
-      ]);
-    } else {
-      exec("unzip", ["-o", archive, "-d", outDir]);
-    }
+    expandZip(archive, outDir);
     const binary = findFile(outDir, ".exe");
     if (!binary) fail("mihomo 压缩包中没有找到 .exe 文件");
     installSidecar("mihomo", binary);
@@ -230,11 +232,7 @@ async function fetchWintun() {
   await download(`https://www.wintun.net/builds/wintun-${WINTUN_VERSION}.zip`, archive);
   const outDir = join(tmpdir(), `wintun-${Date.now()}`);
   mkdirSync(outDir, { recursive: true });
-  exec("powershell", [
-    "-NoProfile",
-    "-Command",
-    `Expand-Archive -Force -Path '${archive}' -DestinationPath '${outDir}'`,
-  ]);
+  expandZip(archive, outDir);
   const dll = findFile(outDir, "wintun.dll", "amd64");
   if (!dll) fail("wintun 压缩包中没有找到 amd64/wintun.dll");
   copyFileSync(dll, target);

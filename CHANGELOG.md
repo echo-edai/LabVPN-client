@@ -2,7 +2,11 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [0.1.22]
+## [0.1.23]
+
+- Windows 构建使用系统 `tar.exe` 解压内置组件；Windows TUN 启动端口改为绑定探测。
+
+## [0.1.22] — 构建预检
 
 - 分流页可导入 Shadowrocket、纯文本列表及 Clash YAML 规则，并预览公开的 `lazy_group` 配置。
 - 导入档案保留校内与 SSH 优先级；配置生成时使用本地规则快照，不导入节点、凭据或脚本。

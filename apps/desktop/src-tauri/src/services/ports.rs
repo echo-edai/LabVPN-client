@@ -1,6 +1,8 @@
 //! 按核心的实际运行权限选择 TCP 端口。
 
-use std::{io, net::SocketAddr, time::Duration};
+use std::io;
+#[cfg(unix)]
+use std::{net::SocketAddr, time::Duration};
 
 use crate::error::{CmdResult, CommandError};
 
@@ -65,8 +67,9 @@ async fn pick(
 }
 
 async fn available(port: u16, helper: bool) -> io::Result<()> {
-    let address = SocketAddr::from(([127, 0, 0, 1], port));
+    #[cfg(unix)]
     if helper {
+        let address = SocketAddr::from(([127, 0, 0, 1], port));
         // 只确认是否有活跃 TCP 监听；TIME_WAIT 和普通用户的权限不等于监听占用。
         return match tokio::time::timeout(
             Duration::from_millis(200),
@@ -86,12 +89,16 @@ async fn available(port: u16, helper: bool) -> io::Result<()> {
             )),
         };
     }
+    // Windows 上没有监听也可能无法在 200ms 内返回拒绝；直接验证是否能绑定。
+    #[cfg(not(unix))]
+    let _ = helper;
     crate::platform::probe_local_listener(port)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     #[tokio::test]
@@ -114,6 +121,7 @@ mod tests {
         assert!(!warnings[0].contains("已被其他程序占用"));
     }
 
+    #[cfg(unix)]
     #[tokio::test]
     async fn closed_tcp_connection_is_not_a_listener() {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
